@@ -8,6 +8,7 @@ import type {
   TurnRow,
   ClosureRow,
   ClosureType,
+  PhaseParagraphCommitRow,
 } from '@/lib/types';
 import FriendFace from '@/components/FriendFace';
 
@@ -16,11 +17,19 @@ interface SessionResponse {
   drafts: DraftRow[];
   turns: TurnRow[];
   closure: ClosureRow | null;
+  phase_commits?: PhaseParagraphCommitRow[];
 }
 
 const CLOSURE_LABEL: Record<
   ClosureType,
-  { ko: string; emoji: string; bg: string; border: string; text: string; mood: 'calm' | 'sharp' }
+  {
+    ko: string;
+    emoji: string;
+    bg: string;
+    border: string;
+    text: string;
+    mood: 'calm' | 'sharp';
+  }
 > = {
   full: {
     ko: '완전 설득됐어!',
@@ -28,7 +37,7 @@ const CLOSURE_LABEL: Record<
     bg: '#ecfdf5',
     border: '#6ee7b7',
     text: '#047857',
-    mood: 'calm',
+    mood: 'sharp', // 친구가 인정하면서도 약오름
   },
   partial: {
     ko: '반쯤 설득',
@@ -40,11 +49,11 @@ const CLOSURE_LABEL: Record<
   },
   impasse: {
     ko: '입장은 그대로지만',
-    emoji: '😤',
+    emoji: '😏',
     bg: '#fff1f2',
     border: '#fda4af',
     text: '#9f1239',
-    mood: 'sharp',
+    mood: 'calm', // 친구 잘난 척
   },
 };
 
@@ -98,18 +107,32 @@ export default function ResultPage({
     );
   }
 
-  const { session, drafts, closure } = data;
+  const { session, drafts, closure, phase_commits = [] } = data;
 
-  function getPhaseDraft(phase: 'intro' | 'body' | 'conclusion'): string {
-    const phaseDrafts = drafts.filter((d) => d.phase === phase);
-    const committed = phaseDrafts.find((d) => d.source === 'committed');
-    if (committed) return committed.content;
-    return phaseDrafts[phaseDrafts.length - 1]?.content ?? '';
+  // commit된 draft만 phase/paragraph_idx 순으로 추출
+  const commitMap = new Map(
+    phase_commits.map((c) => [`${c.phase}-${c.paragraph_idx}`, c.committed_draft_id])
+  );
+  const draftMap = new Map(drafts.map((d) => [d.id, d]));
+
+  function getCommittedContent(
+    phase: 'intro' | 'body' | 'conclusion',
+    paragraphIdx: number
+  ): string {
+    const draftId = commitMap.get(`${phase}-${paragraphIdx}`);
+    if (!draftId) return '';
+    return draftMap.get(draftId)?.content ?? '';
   }
 
-  const intro = getPhaseDraft('intro');
-  const body = getPhaseDraft('body');
-  const conclusion = getPhaseDraft('conclusion');
+  const intro = getCommittedContent('intro', 0);
+  const conclusion = getCommittedContent('conclusion', 0);
+
+  // 본론은 paragraph_idx 0..4 중 commit된 것만
+  const bodyParagraphs: { idx: number; content: string }[] = [];
+  for (let i = 0; i < 5; i++) {
+    const c = getCommittedContent('body', i);
+    if (c) bodyParagraphs.push({ idx: i, content: c });
+  }
 
   const closureMeta = closure ? CLOSURE_LABEL[closure.closure_type] : null;
   const rationale = closure
@@ -160,7 +183,6 @@ export default function ResultPage({
                   {closure.agent_message}
                 </p>
 
-                {/* Persuasion 게이지 */}
                 {typeof closure.persuasion_pct === 'number' && (
                   <div className="mt-4">
                     <div className="h-3 w-full rounded-full bg-white/60 overflow-hidden border border-stone-200">
@@ -202,23 +224,36 @@ export default function ResultPage({
         )}
 
         <section className="bg-white rounded-3xl border-2 border-amber-100 shadow-sm p-6 mb-6 fade-in">
-          <h2 className="font-display text-2xl text-stone-800 mb-4">
-            📜 네가 쓴 글
-          </h2>
+          <h2 className="font-display text-2xl text-stone-800 mb-4">📜 네가 쓴 글</h2>
           <article className="space-y-5 text-stone-800 leading-relaxed">
             <DraftBlock label="서론" content={intro} />
-            <DraftBlock label="본론" content={body} />
+            {bodyParagraphs.length > 0 ? (
+              <div>
+                <h3 className="font-display text-lg text-amber-700 mb-1">본론</h3>
+                <div className="space-y-3">
+                  {bodyParagraphs.map((p) => (
+                    <div key={p.idx}>
+                      <div className="text-xs font-bold text-amber-600 uppercase tracking-wide mb-1">
+                        {p.idx + 1}문단
+                      </div>
+                      <p className="text-base whitespace-pre-wrap leading-loose">
+                        {p.content}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <DraftBlock label="본론" content="" />
+            )}
             <DraftBlock label="결론" content={conclusion} />
           </article>
         </section>
 
         <section className="bg-white rounded-3xl border-2 border-sky-100 shadow-sm p-6 mb-6 fade-in">
-          <h2 className="font-display text-2xl text-stone-800 mb-2">
-            📥 데이터 내보내기
-          </h2>
+          <h2 className="font-display text-2xl text-stone-800 mb-2">📥 데이터 내보내기</h2>
           <p className="text-sm text-stone-600 mb-4 leading-relaxed">
             이 글쓰기 세션의 모든 액션·대화·평가 기록을 JSON 파일로 받을 수 있어.
-            연구자에게 메일이나 공유 폴더로 전달해 줘!
           </p>
           <a
             href={`/api/sessions/${sessionId}/export`}
@@ -248,9 +283,7 @@ function DraftBlock({ label, content }: { label: string; content: string }) {
     <div>
       <h3 className="font-display text-lg text-amber-700 mb-1">{label}</h3>
       <p className="text-base whitespace-pre-wrap leading-loose">
-        {content || (
-          <span className="text-stone-400 italic">(작성 안 됨)</span>
-        )}
+        {content || <span className="text-stone-400 italic">(작성 안 됨)</span>}
       </p>
     </div>
   );

@@ -5,6 +5,7 @@ import {
   getAllTurns,
   getAllCalibrations,
   getClosure,
+  getPhaseParagraphCommits,
 } from '@/lib/queries';
 
 // GET /api/sessions/[id] — 세션 전체 상태 조회 (이어하기 / 복원용)
@@ -18,11 +19,12 @@ export async function GET(
     return NextResponse.json({ error: 'Session not found' }, { status: 404 });
   }
 
-  const [drafts, turns, calibrations, closure] = await Promise.all([
+  const [drafts, turns, calibrations, closure, phase_commits] = await Promise.all([
     getAllDrafts(id),
     getAllTurns(id),
     getAllCalibrations(id),
     getClosure(id),
+    getPhaseParagraphCommits(id),
   ]);
 
   return NextResponse.json({
@@ -31,5 +33,6 @@ export async function GET(
     turns,
     calibrations,
     closure,
+    phase_commits,
   });
 }
