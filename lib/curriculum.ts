@@ -1,36 +1,23 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import type { Phase } from './types';
 
 // ──────────────────────────────────────────────────────────
 // 헌법(2022 개정 국어과 교육과정 + 5·6학년 국정교과서) 자료
+// v2: HTML → Markdown 변환된 파일 로드
 // ──────────────────────────────────────────────────────────
 
-function extractText(html: string): string {
-  let text = html.replace(/<style[\s\S]*?<\/style>/gi, '');
-  text = text.replace(/<script[\s\S]*?<\/script>/gi, '');
-  text = text.replace(/<head[\s\S]*?<\/head>/gi, '');
-  text = text.replace(/<[^>]+>/g, ' ');
-  text = text.replace(/&nbsp;/g, ' ');
-  text = text.replace(/&amp;/g, '&');
-  text = text.replace(/&lt;/g, '<');
-  text = text.replace(/&gt;/g, '>');
-  text = text.replace(/&quot;/g, '"');
-  text = text.replace(/&#\d+;/g, ' ');
-  text = text.replace(/\s+/g, ' ').trim();
-  return text;
-}
-
 const CURRICULUM_FILES = [
-  '헌법_공통.html',
-  '헌법_서론.html',
-  '헌법_본론.html',
-  '헌법_결론.html',
+  '헌법_공통.md',
+  '헌법_서론.md',
+  '헌법_본론.md',
+  '헌법_결론.md',
 ];
 
 let cachedCurriculum: string | null = null;
 
 /**
- * 헌법 4편(공통/서론/본론/결론)을 텍스트로 합쳐서 반환.
+ * 헌법 4편(공통/서론/본론/결론)을 Markdown으로 합쳐서 반환.
  * LLM 시스템 프롬프트에 주입할 용도.
  */
 export function loadCurriculum(): string {
@@ -42,16 +29,14 @@ export function loadCurriculum(): string {
   for (const file of CURRICULUM_FILES) {
     const fp = path.join(dir, file);
     try {
-      const html = fs.readFileSync(fp, 'utf-8');
-      const text = extractText(html);
-      const sectionName = file.replace('.html', '');
-      sections.push(`### ${sectionName}\n${text}`);
+      const md = fs.readFileSync(fp, 'utf-8');
+      sections.push(md.trim());
     } catch (err) {
       console.warn(`[curriculum] failed to load ${file}:`, err);
     }
   }
 
-  cachedCurriculum = sections.join('\n\n');
+  cachedCurriculum = sections.join('\n\n---\n\n');
   return cachedCurriculum;
 }
 
@@ -63,18 +48,18 @@ export const ACHIEVEMENT_STANDARDS: Record<string, string> = {
 };
 
 // ─── 5·6학년 국정교과서 5개 평가요소 ───
-export interface Dimension {
-  id: keyof DimensionScores;
-  label: string;        // 한국어 라벨
-  prompt: string;       // 교과서 평가 문항
-}
-
 export interface DimensionScores {
   claim_clarity: number | null;
   evidence_appropriateness: number | null;
   evidence_relevance: number | null;
   expression_appropriateness: number | null;
   structural_coherence: number | null;
+}
+
+export interface Dimension {
+  id: keyof DimensionScores;
+  label: string;
+  prompt: string;
 }
 
 export const FIVE_DIMENSIONS: Dimension[] = [
@@ -87,4 +72,44 @@ export const FIVE_DIMENSIONS: Dimension[] = [
 
 export function dimensionLabel(id: keyof DimensionScores): string {
   return FIVE_DIMENSIONS.find((d) => d.id === id)?.label ?? id;
+}
+
+// ─── 페이즈별 헌법 신호 한국어 라벨 (학생에게 노출되는 자연어 라벨) ───
+
+export const INTRO_SIGNAL_LABELS = {
+  thesis_present: '핵심 명제 존재',
+  thesis_singular: '주장 단일성',
+  thesis_assertive_form: '주장형 서술어',
+  intro_method_label: '도입 방법',
+} as const;
+
+export const BODY_SIGNAL_LABELS = {
+  topic_sentence_present: '소주제문 명료성',
+  argument_method_identifiable: '논증 방식 명시성',
+  argument_method_label: '논증 유형',
+  appropriateness_to_thesis: '주장과의 정합성',
+  appropriateness_to_preceding: '앞 문단과의 일관성',
+  link_word_used: '연결어 사용',
+} as const;
+
+export const CONCLUSION_SIGNAL_LABELS = {
+  summary_present: '근거 요약',
+  summary_concise: '요약 간결성',
+  punch_line_present: '강조(펀치라인)',
+  punch_line_method_label: '강조 방식',
+  no_new_argument: '새 근거 추가 X',
+  thesis_recall_clear: '핵심 명제 재확인',
+} as const;
+
+export function getCurriculumSignalLabel(phase: Phase, key: string): string {
+  if (phase === 'intro') {
+    return (INTRO_SIGNAL_LABELS as Record<string, string>)[key] ?? key;
+  }
+  if (phase === 'body') {
+    return (BODY_SIGNAL_LABELS as Record<string, string>)[key] ?? key;
+  }
+  if (phase === 'conclusion') {
+    return (CONCLUSION_SIGNAL_LABELS as Record<string, string>)[key] ?? key;
+  }
+  return key;
 }

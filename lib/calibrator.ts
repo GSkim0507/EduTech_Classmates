@@ -1,114 +1,194 @@
-import type { Phase, Tone, Domain, Signals } from './types';
-import { FIVE_DIMENSIONS, dimensionLabel } from './curriculum';
+import type {
+  Phase,
+  Tone,
+  Domain,
+  Signals,
+  CurriculumSignals,
+  IntroCurriculumSignals,
+  BodyCurriculumSignals,
+  ConclusionCurriculumSignals,
+} from './types';
+import {
+  FIVE_DIMENSIONS,
+  dimensionLabel,
+  getCurriculumSignalLabel,
+} from './curriculum';
 
 // ──────────────────────────────────────────────────────────
-// Phase-level Dynamic Recalibration
-// 학생 산출물(draft) + 행동 신호 → 다음 페이즈의 (tone, domain) 결정
+// Phase-level Dynamic Recalibration (v2)
+// 5 평가요소 + 헌법 신호 + 행동 신호 → 다음 페이즈의 (tone, domain) 결정
+// 게임 페르소나: 잘 쓰면 annoying(친구 약오름) / 못 쓰면 less-annoying(친구 잘난 척)
+// spec: docs/superpowers/specs/2026-05-09-system-redesign-design.md §4.5
 // ──────────────────────────────────────────────────────────
 
 export interface CalibrationInput {
-  phase: Phase;
+  phase: Exclude<Phase, 'done'>;
+  paragraphIdx?: number | null;
   signals: Signals;
+  curriculumSignals: CurriculumSignals | null;
 }
 
 export interface CalibrationOutput {
   nextTone: Tone;
   nextDomain: Domain;
-  weakestDimension: string | null;     // 한국어 라벨
-  reason: string;                      // 디버그용 설명
+  weakestViolationLabel: string | null;
+  reason: string;
+  /** 0~100, 학생 점수 (승부 게이지용) */
+  studentScore: number;
 }
 
 /**
- * 5개 평가요소 + 행동 신호로부터 다음 모드 결정.
- * 사전 라벨링이 아닌 산출물 기반 동적 재추정.
+ * 헌법 신호의 위반 카운트 + 가장 약한 신호 라벨 반환.
  */
+function analyzeCurriculum(cur: CurriculumSignals | null): {
+  violationCount: number;
+  totalChecks: number;
+  weakestLabel: string | null;
+} {
+  if (!cur) return { violationCount: 0, totalChecks: 0, weakestLabel: null };
+
+  const violations: { key: string; severity: number }[] = [];
+
+  if (cur.phase === 'intro') {
+    const c = cur as IntroCurriculumSignals;
+    if (!c.thesis_present) violations.push({ key: 'thesis_present', severity: 1.0 });
+    if (!c.thesis_singular) violations.push({ key: 'thesis_singular', severity: 0.8 });
+    if (!c.thesis_assertive_form)
+      violations.push({ key: 'thesis_assertive_form', severity: 0.6 });
+  } else if (cur.phase === 'body') {
+    const c = cur as BodyCurriculumSignals;
+    if (!c.topic_sentence_present)
+      violations.push({ key: 'topic_sentence_present', severity: 1.0 });
+    if (!c.argument_method_identifiable)
+      violations.push({ key: 'argument_method_identifiable', severity: 0.9 });
+    if (c.appropriateness_to_thesis < 0.5)
+      violations.push({
+        key: 'appropriateness_to_thesis',
+        severity: 1.0 - c.appropriateness_to_thesis,
+      });
+    if (c.appropriateness_to_preceding < 0.5)
+      violations.push({
+        key: 'appropriateness_to_preceding',
+        severity: 1.0 - c.appropriateness_to_preceding,
+      });
+    if (!c.link_word_used)
+      violations.push({ key: 'link_word_used', severity: 0.4 });
+  } else {
+    const c = cur as ConclusionCurriculumSignals;
+    if (!c.summary_present) violations.push({ key: 'summary_present', severity: 0.9 });
+    if (!c.summary_concise) violations.push({ key: 'summary_concise', severity: 0.5 });
+    if (!c.punch_line_present)
+      violations.push({ key: 'punch_line_present', severity: 0.9 });
+    if (!c.no_new_argument)
+      violations.push({ key: 'no_new_argument', severity: 0.85 });
+    if (!c.thesis_recall_clear)
+      violations.push({ key: 'thesis_recall_clear', severity: 0.7 });
+  }
+
+  // 페이즈별 총 체크 항목 수 (대략)
+  const totalChecks = cur.phase === 'intro' ? 3 : cur.phase === 'body' ? 5 : 5;
+
+  // 가장 심각한 위반 = 가장 약한 신호
+  let weakestLabel: string | null = null;
+  if (violations.length > 0) {
+    violations.sort((a, b) => b.severity - a.severity);
+    weakestLabel = getCurriculumSignalLabel(cur.phase, violations[0].key);
+  }
+
+  return { violationCount: violations.length, totalChecks, weakestLabel };
+}
+
 export function calibrate(input: CalibrationInput): CalibrationOutput {
-  const { signals } = input;
+  const { signals, curriculumSignals } = input;
 
-  // 1. 평가요소 점수 추출 (null/undefined 제외)
-  const evalPairs = FIVE_DIMENSIONS.map((d) => {
-    const score = signals[d.id];
-    return { id: d.id, label: d.label, score: typeof score === 'number' ? score : null };
-  });
-
-  const validScores = evalPairs
-    .map((e) => e.score)
+  // 1. 5 평가요소 평균
+  const evalScores = FIVE_DIMENSIONS.map((d) => signals[d.id])
     .filter((v): v is number => typeof v === 'number');
-
   const avgEval =
-    validScores.length > 0
-      ? validScores.reduce((a, b) => a + b, 0) / validScores.length
+    evalScores.length > 0
+      ? evalScores.reduce((a, b) => a + b, 0) / evalScores.length
       : 0.5;
 
-  // 2. 가장 약한 평가요소
-  let weakest: { label: string; score: number } | null = null;
-  for (const e of evalPairs) {
-    if (e.score === null) continue;
-    if (!weakest || e.score < weakest.score) {
-      weakest = { label: e.label, score: e.score };
+  // 2. 5 평가요소 weakest
+  let weakestEval: { label: string; score: number } | null = null;
+  for (const d of FIVE_DIMENSIONS) {
+    const s = signals[d.id];
+    if (typeof s === 'number' && (!weakestEval || s < weakestEval.score)) {
+      weakestEval = { label: dimensionLabel(d.id), score: s };
     }
   }
 
-  // 3. 행동 신호
+  // 3. 헌법 신호 분석
+  const cur = analyzeCurriculum(curriculumSignals);
+  const curriculumViolationRatio =
+    cur.totalChecks > 0 ? cur.violationCount / cur.totalChecks : 0;
+
+  // 4. 행동 신호
   const helpCount = signals.help_request_count ?? 0;
   const revisionCount = signals.self_revision_count ?? 0;
 
-  // 학생이 자주 도움 요청 = 막힘 → less-annoying으로
-  // 자기 수정이 많고 평균 점수도 좋음 = 잘 따라옴 → annoying으로 도전
-  const studentStruggling = helpCount >= 2;
-  const studentEngaged = revisionCount >= 1 && avgEval >= 0.7;
+  // 5. 종합 점수 (0~1, 학생 잘함 정도) — 평가요소 평균 70% + 헌법 30%
+  const composite =
+    avgEval * 0.7 + (1 - curriculumViolationRatio) * 0.3;
 
+  // 6. tone 결정 — 게임 페르소나
+  // 잘 쓰면 친구 약오름 (annoying), 못 쓰면 잘난 척 (less-annoying)
   let nextTone: Tone;
-  if (studentStruggling) {
-    nextTone = 'less-annoying';
-  } else if (studentEngaged) {
-    nextTone = 'annoying';
-  } else if (avgEval >= 0.7) {
-    nextTone = 'annoying';
+  if (composite >= 0.65 && cur.violationCount <= 1) {
+    nextTone = 'annoying'; // 학생 잘 씀 → 친구 약오름
+  } else if (composite < 0.45 || cur.violationCount >= 3 || helpCount >= 2) {
+    nextTone = 'less-annoying'; // 학생 못 씀 → 친구 잘난 척
+  } else if (revisionCount >= 1 && composite >= 0.55) {
+    nextTone = 'annoying'; // 자기수정 활발 + 평이 이상 → 도전
   } else {
     nextTone = 'less-annoying';
   }
 
-  // 4. domain 결정
-  // - 5요소 중 명확하게 약한 게 있으면 → writing (그 약점을 짚기)
-  // - 그렇지 않거나 페이즈 시작이면 → idea (자유 사고 자극)
+  // 7. weakest 영역 결정 — 헌법 weakest와 5 평가요소 weakest 중 더 약한 것
+  let weakestLabel: string | null = null;
+  let weakestSource: 'eval' | 'curriculum' | null = null;
+  if (cur.weakestLabel) {
+    weakestLabel = cur.weakestLabel;
+    weakestSource = 'curriculum';
+  }
+  if (weakestEval && weakestEval.score < 0.55) {
+    if (!weakestLabel || weakestEval.score < 0.4) {
+      weakestLabel = weakestEval.label;
+      weakestSource = 'eval';
+    }
+  }
+
+  // 8. domain 결정
   let nextDomain: Domain;
-  if (weakest && weakest.score < 0.6) {
+  if (weakestSource === 'curriculum' || (weakestEval && weakestEval.score < 0.5)) {
     nextDomain = 'writing';
-  } else if (validScores.length === 0) {
-    // 평가 점수 없음 → 글이 거의 없거나 측정 불가
+  } else if (evalScores.length === 0) {
     nextDomain = 'idea';
   } else {
     nextDomain = 'idea';
   }
 
-  const reason = `avg=${avgEval.toFixed(2)}, weakest=${weakest?.label ?? 'n/a'}(${weakest?.score.toFixed(2) ?? '-'}), help=${helpCount}, revisions=${revisionCount} → ${nextTone}/${nextDomain}`;
+  const reason = `composite=${composite.toFixed(2)} (avgEval=${avgEval.toFixed(2)}, curriculumViolations=${cur.violationCount}/${cur.totalChecks}), help=${helpCount}, revisions=${revisionCount}, weakest=${weakestLabel ?? 'n/a'} → ${nextTone}/${nextDomain}`;
 
   return {
     nextTone,
     nextDomain,
-    weakestDimension: weakest?.label ?? null,
+    weakestViolationLabel: weakestLabel,
     reason,
+    studentScore: Math.round(composite * 100),
   };
 }
 
 // ──────────────────────────────────────────────────────────
-// 행동 신호 계산 헬퍼 (서버에서 DB 로그 기반)
+// 행동 신호 계산 헬퍼
 // ──────────────────────────────────────────────────────────
 
-/**
- * 텍스트 길이 기반 응답 복잡도 (0~1)
- * 200자 = 1.0 기준
- */
 export function computeResponseComplexity(text: string): number {
   if (!text) return 0;
   const len = text.replace(/\s+/g, '').length;
   return Math.min(1, len / 200);
 }
 
-/**
- * 어휘 다양성 (TTR — type-token ratio, 0~1)
- */
 export function computeLexicalDiversity(text: string): number {
   if (!text) return 0;
   const tokens = text
