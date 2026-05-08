@@ -2,25 +2,40 @@ import { NextResponse } from 'next/server';
 import { db, now } from '@/lib/db';
 import {
   getSession,
-  getLatestDraft,
-  getCommittedDraft,
+  getLatestDraftParagraph,
+  getCommittedDraftParagraph,
+  getCommittedBodyParagraphs,
   getAllTurns,
   getHelpCount,
   getRevisionCount,
   getNextTurnIdx,
+  getLatestCalibration,
   touchSession,
 } from '@/lib/queries';
 import { buildSystemPrompt } from '@/lib/persona';
-import { calibrate, computeResponseComplexity, computeLexicalDiversity } from '@/lib/calibrator';
+import {
+  calibrate,
+  computeResponseComplexity,
+  computeLexicalDiversity,
+} from '@/lib/calibrator';
 import { callClaude, evaluateDraft, type ChatMessage } from '@/lib/claude';
-import type { ChatRequestInput, Phase, Tone, Domain, Signals } from '@/lib/types';
+import type {
+  TurnRequestInput,
+  Phase,
+  Tone,
+  Domain,
+  Signals,
+  CurriculumSignals,
+  HelpDomain,
+  PrecedingContent,
+} from '@/lib/types';
 
-const VALID_TRIGGERS = ['submit', 'help', 'chat'] as const;
+const VALID_TRIGGERS = ['submit', 'help'] as const;
+const VALID_HELP_DOMAINS: HelpDomain[] = ['idea', 'writing', 'both'];
 
 // POST /api/sessions/[id]/turn
-//   trigger='help'   → 학생이 현재 draft에 대해 도움 요청
-//   trigger='submit' → 학생이 현재 phase draft를 제출 (calibration 포함)
-//   trigger='chat'   → 학생이 자유 채팅 메시지 전송
+//   trigger='help'   → 학생이 helpDomain 명시 선택 → 그 영역만 친구가 응답
+//   trigger='submit' → 시스템이 자동 평가 (evaluateDraft + calibrate) + 게임 페르소나 응답
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -31,45 +46,46 @@ export async function POST(
     return NextResponse.json({ error: 'Session not found' }, { status: 404 });
   }
 
-  let body: ChatRequestInput;
+  let body: TurnRequestInput;
   try {
-    body = (await request.json()) as ChatRequestInput;
+    body = (await request.json()) as TurnRequestInput;
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { apiKey, trigger, studentMessage } = body;
+  const { apiKey, trigger, helpDomain, studentMessage } = body;
 
   if (!apiKey?.trim()) {
+    return NextResponse.json({ error: 'Claude API 키가 필요합니다.' }, { status: 400 });
+  }
+  if (!VALID_TRIGGERS.includes(trigger as 'submit' | 'help')) {
+    return NextResponse.json({ error: 'Invalid trigger (submit | help)' }, { status: 400 });
+  }
+  if (trigger === 'help' && (!helpDomain || !VALID_HELP_DOMAINS.includes(helpDomain))) {
     return NextResponse.json(
-      { error: 'Claude API 키가 필요합니다.' },
+      { error: 'help trigger requires helpDomain (idea | writing | both)' },
       { status: 400 }
     );
   }
-  if (!VALID_TRIGGERS.includes(trigger)) {
-    return NextResponse.json({ error: 'Invalid trigger' }, { status: 400 });
-  }
-
   if (session.current_phase === 'done') {
-    return NextResponse.json(
-      { error: '이 세션은 이미 종료되었습니다 (closure 완료).' },
-      { status: 409 }
-    );
+    return NextResponse.json({ error: '이미 종료된 세션입니다.' }, { status: 409 });
   }
 
   const phase = session.current_phase as Exclude<Phase, 'done'>;
+  const paragraphIdx =
+    typeof body.paragraphIdx === 'number'
+      ? body.paragraphIdx
+      : phase === 'body'
+        ? 0
+        : 0;
 
   // ─── 학생 turn 저장 ───
-  const latestDraft = await getLatestDraft(id, phase);
-  const studentContent =
-    studentMessage?.trim() ||
-    (trigger === 'help' || trigger === 'submit'
-      ? latestDraft?.content ?? ''
-      : '');
+  const latestDraft = await getLatestDraftParagraph(id, phase, paragraphIdx);
+  const studentContent = studentMessage?.trim() || latestDraft?.content || '';
 
-  if (trigger === 'chat' && !studentContent) {
+  if (!studentContent.trim()) {
     return NextResponse.json(
-      { error: 'chat 트리거는 메시지 본문이 필요합니다.' },
+      { error: '먼저 글을 조금이라도 써 주세요.' },
       { status: 400 }
     );
   }
@@ -77,84 +93,117 @@ export async function POST(
   const studentIdx = await getNextTurnIdx(id);
   const studentTurnResult = await db.execute({
     sql: `INSERT INTO turns
-            (session_id, idx, phase, role, content, triggered_by, related_draft_id, timestamp)
-          VALUES (?, ?, ?, 'student', ?, ?, ?, ?)`,
+            (session_id, idx, phase, paragraph_idx, role, content,
+             triggered_by, help_domain, related_draft_id, timestamp)
+          VALUES (?, ?, ?, ?, 'student', ?, ?, ?, ?, ?)`,
     args: [
       id,
       studentIdx,
       phase,
+      phase === 'body' ? paragraphIdx : null,
       studentContent,
       trigger,
+      trigger === 'help' ? (helpDomain ?? null) : null,
       latestDraft?.id ?? null,
       now(),
     ],
   });
   const studentTurnId = Number(studentTurnResult.lastInsertRowid);
 
-  // ─── (submit/help) calibration 실행 ───
+  // ─── preceding 컨텍스트 수집 ───
+  const preceding: PrecedingContent = {};
+  if (phase !== 'intro') {
+    const introCommit = await getCommittedDraftParagraph(id, 'intro', 0);
+    if (introCommit) preceding.intro = introCommit.content;
+  }
+  if (phase === 'body' && paragraphIdx > 0) {
+    const allBody = await getCommittedBodyParagraphs(id);
+    preceding.bodyParagraphs = allBody
+      .filter((p) => p.paragraph_idx < paragraphIdx)
+      .map((p) => p.content);
+  }
+  if (phase === 'conclusion') {
+    const allBody = await getCommittedBodyParagraphs(id);
+    preceding.bodyParagraphs = allBody.map((p) => p.content);
+  }
+
+  // ─── tone/domain/calibration 결정 ───
   let nextTone: Tone = 'less-annoying';
   let nextDomain: Domain = 'idea';
-  let weakestDimension: string | null = null;
+  let weakestViolationLabel: string | null = null;
   let signals: Signals = {};
+  let curriculumSignals: CurriculumSignals | null = null;
+  let calibrationId: number | null = null;
 
-  if ((trigger === 'submit' || trigger === 'help') && latestDraft) {
-    // 평가 시 이전 phase 글도 컨텍스트로 제공
-    const precedingDraft: { intro?: string; body?: string } = {};
-    if (phase !== 'intro') {
-      const introCommit = await getCommittedDraft(id, 'intro');
-      if (introCommit) precedingDraft.intro = introCommit.content;
-    }
-    if (phase === 'conclusion') {
-      const bodyCommit = await getCommittedDraft(id, 'body');
-      if (bodyCommit) precedingDraft.body = bodyCommit.content;
-    }
-
-    let evalScores: Record<string, number | null> = {};
+  if (trigger === 'submit' && latestDraft) {
+    // LLM 평가 (5 평가요소 + 헌법 신호)
     try {
-      evalScores = await evaluateDraft({
+      const evalResult = await evaluateDraft({
         apiKey,
         draftText: latestDraft.content,
         phase,
         topic: session.topic,
-        precedingDraft,
+        paragraphIdx: phase === 'body' ? paragraphIdx : undefined,
+        preceding,
       });
+      signals = { ...evalResult.scores, notes: evalResult.notes };
+      curriculumSignals = evalResult.curriculum;
     } catch (err) {
       console.warn('[turn] evaluateDraft failed:', err);
     }
 
-    const helpCount = await getHelpCount(id, phase);
-    const revisionCount = await getRevisionCount(id, phase);
+    // 행동 신호
+    signals.help_request_count = await getHelpCount(
+      id,
+      phase,
+      phase === 'body' ? paragraphIdx : null
+    );
+    signals.self_revision_count = await getRevisionCount(
+      id,
+      phase,
+      phase === 'body' ? paragraphIdx : null
+    );
+    signals.response_complexity = computeResponseComplexity(latestDraft.content);
+    signals.lexical_diversity = computeLexicalDiversity(latestDraft.content);
 
-    signals = {
-      ...evalScores,
-      help_request_count: helpCount,
-      self_revision_count: revisionCount,
-      response_complexity: computeResponseComplexity(latestDraft.content),
-      lexical_diversity: computeLexicalDiversity(latestDraft.content),
-    };
-
-    const calib = calibrate({ phase, signals });
+    // calibrate
+    const calib = calibrate({ phase, paragraphIdx, signals, curriculumSignals });
     nextTone = calib.nextTone;
     nextDomain = calib.nextDomain;
-    weakestDimension = calib.weakestDimension;
+    weakestViolationLabel = calib.weakestViolationLabel;
 
-    await db.execute({
+    // calibration 저장
+    const calibRow = await db.execute({
       sql: `INSERT INTO calibrations
-              (session_id, phase, trigger, draft_id, signals_json,
-               next_tone, next_domain, weakest_dimension, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              (session_id, phase, paragraph_idx, trigger, draft_id,
+               signals_json, curriculum_signals_json, next_tone, next_domain,
+               weakest_violation_label, timestamp)
+            VALUES (?, ?, ?, 'submit', ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         id,
         phase,
-        trigger,
+        phase === 'body' ? paragraphIdx : null,
         latestDraft.id,
         JSON.stringify(signals),
+        curriculumSignals ? JSON.stringify(curriculumSignals) : null,
         nextTone,
         nextDomain,
-        weakestDimension,
+        weakestViolationLabel,
         now(),
       ],
     });
+    calibrationId = Number(calibRow.lastInsertRowid);
+  } else if (trigger === 'help') {
+    // help는 calibrator 안 부름. 직전 calibration의 tone 유지 + helpDomain → domain.
+    const lastCalib = await getLatestCalibration(id);
+    nextTone = (lastCalib?.next_tone as Tone) ?? 'less-annoying';
+    nextDomain =
+      helpDomain === 'idea'
+        ? 'idea'
+        : helpDomain === 'writing'
+          ? 'writing'
+          : 'idea';
+    weakestViolationLabel = lastCalib?.weakest_violation_label ?? null;
   }
 
   // ─── 시스템 프롬프트 빌드 + LLM 호출 ───
@@ -163,16 +212,17 @@ export async function POST(
     tone: nextTone,
     domain: nextDomain,
     phase,
-    weakestDimension,
+    paragraphIdx: phase === 'body' ? paragraphIdx : null,
+    weakestViolationLabel,
+    preceding,
+    forcedHelpDomain: trigger === 'help' ? helpDomain ?? null : null,
   });
 
   const allTurns = await getAllTurns(id);
-  const messages: ChatMessage[] = allTurns
-    // 마지막 student turn 포함
-    .map((t) => ({
-      role: t.role === 'student' ? ('user' as const) : ('assistant' as const),
-      content: t.content,
-    }));
+  const messages: ChatMessage[] = allTurns.map((t) => ({
+    role: t.role === 'student' ? ('user' as const) : ('assistant' as const),
+    content: t.content,
+  }));
 
   let assistantMessage: string;
   try {
@@ -197,16 +247,20 @@ export async function POST(
   const assistantIdx = studentIdx + 1;
   const assistantResult = await db.execute({
     sql: `INSERT INTO turns
-            (session_id, idx, phase, role, content, triggered_by,
-             related_draft_id, tone, domain, timestamp)
-          VALUES (?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?)`,
+            (session_id, idx, phase, paragraph_idx, role, content,
+             triggered_by, help_domain, related_draft_id, calibration_id,
+             tone, domain, timestamp)
+          VALUES (?, ?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id,
       assistantIdx,
       phase,
+      phase === 'body' ? paragraphIdx : null,
       assistantMessage,
       trigger,
+      trigger === 'help' ? (helpDomain ?? null) : null,
       latestDraft?.id ?? null,
+      calibrationId,
       nextTone,
       nextDomain,
       now(),
@@ -222,8 +276,14 @@ export async function POST(
     tone: nextTone,
     domain: nextDomain,
     calibration:
-      trigger !== 'chat'
-        ? { nextTone, nextDomain, weakestDimension, signals }
+      trigger === 'submit'
+        ? {
+            nextTone,
+            nextDomain,
+            weakestViolationLabel,
+            signals,
+            curriculumSignals,
+          }
         : undefined,
   });
 }

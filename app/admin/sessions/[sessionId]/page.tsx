@@ -342,9 +342,9 @@ function CalibrationsView({ calibrations }: { calibrations: CalibrationRow[] }) 
               <span className="px-1.5 py-0.5 rounded bg-fuchsia-100 text-fuchsia-800">
                 → {c.next_domain}
               </span>
-              {c.weakest_dimension && (
+              {c.weakest_violation_label && (
                 <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
-                  weakest: {c.weakest_dimension}
+                  weakest: {c.weakest_violation_label}
                 </span>
               )}
               <span className="ml-auto text-slate-400">{formatTs(c.timestamp)}</span>
