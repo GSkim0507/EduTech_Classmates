@@ -1,0 +1,263 @@
+/* 헌법 공통 스타일 — 4개 분리 파일 공유 */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Noto Sans KR', sans-serif;
+  background: #f0f0f0;
+  color: #222;
+  line-height: 1.9;
+  font-size: 15px;
+}
+
+.page {
+  background: #fff;
+  max-width: 800px;
+  margin: 30px auto;
+  padding: 50px 55px 60px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  page-break-after: always;
+}
+
+/* 분리본 헤더 */
+.doc-header {
+  text-align: center;
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 3px double #222;
+}
+.doc-header h1 {
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: 4px;
+  margin-bottom: 6px;
+}
+.doc-header .subtitle {
+  font-size: 13px;
+  color: #666;
+  letter-spacing: 2px;
+}
+
+/* 블록별 색상 배지 */
+.block-tag {
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  margin-bottom: 10px;
+}
+.block-tag--common { background: #e0e0e0; color: #333; }
+.block-tag--intro { background: #dbeafe; color: #1e40af; }
+.block-tag--body { background: #d1fae5; color: #065f46; }
+.block-tag--conclusion { background: #fef3c7; color: #92400e; }
+
+/* 블록별 강조선 */
+.page--common { border-top: 5px solid #777; }
+.page--intro { border-top: 5px solid #2563eb; }
+.page--body { border-top: 5px solid #059669; }
+.page--conclusion { border-top: 5px solid #d97706; }
+
+/* 장 (Chapter) */
+.chapter {
+  text-align: center;
+  margin: 30px 0 25px;
+  padding: 14px 0;
+  border-top: 2px solid #222;
+  border-bottom: 2px solid #222;
+}
+.chapter h2 { font-size: 20px; font-weight: 900; letter-spacing: 4px; }
+
+/* 절 */
+.section {
+  text-align: center;
+  margin: 30px 0 20px;
+  padding: 10px 0;
+  border-bottom: 1px solid #999;
+}
+.section h3 { font-size: 17px; font-weight: 700; letter-spacing: 3px; color: #333; }
+
+/* 조 */
+.article { margin: 28px 0; }
+.article-head {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 8px;
+  color: #111;
+}
+.article-body {
+  padding-left: 20px;
+  font-size: 15px;
+  line-height: 2;
+}
+
+/* 항 / 호 */
+.clause { margin: 6px 0; padding-left: 0; }
+.clause-num { font-weight: 700; margin-right: 2px; }
+.item { padding-left: 22px; margin: 4px 0; }
+.item-num { font-weight: 700; margin-right: 2px; }
+
+/* 예시 박스 */
+.example-block {
+  border-left: 4px solid #888;
+  background: #fafafa;
+  padding: 16px 22px;
+  margin: 14px 0 14px 20px;
+  font-size: 14px;
+  line-height: 2;
+  color: #333;
+}
+.example-label {
+  font-weight: 700;
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 6px;
+  letter-spacing: 1px;
+}
+.example-block .indent { text-indent: 1.5em; }
+
+/* 구조도 */
+.structure-diagram { text-align: center; margin: 20px 0; }
+.structure-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  max-width: 560px;
+  margin: 0 auto;
+}
+.structure-col { border: 2px solid #333; border-radius: 5px; overflow: hidden; }
+.structure-col-header {
+  background: #e0e0e0;
+  font-weight: 700;
+  padding: 5px;
+  border-bottom: 2px solid #333;
+  font-size: 14px;
+}
+.structure-col-body { padding: 8px; font-size: 13px; line-height: 1.7; }
+
+/* 밑줄 */
+.uline { text-decoration: underline; text-underline-offset: 3px; }
+
+/* 부칙 */
+.annex {
+  margin-top: 40px;
+  padding-top: 15px;
+  border-top: 1px solid #ccc;
+  font-size: 13px;
+  color: #888;
+  line-height: 1.8;
+}
+
+/* 논설문 박스 */
+.essay-box {
+  border: 2px solid #555;
+  border-radius: 8px;
+  padding: 25px 30px;
+  margin: 16px 0 16px 20px;
+  line-height: 2.1;
+  font-size: 14px;
+  background: #fcfcfc;
+}
+.essay-box .essay-title {
+  text-align: center;
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 16px;
+}
+
+/* AI 엔진 평가 체크리스트 — 스프라우팅 엔진이 참조 */
+.eval-checklist {
+  background: #fdf2f8;
+  border: 2px dashed #db2777;
+  border-radius: 10px;
+  padding: 22px 26px;
+  margin: 30px 0;
+}
+.eval-checklist h4 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #9d174d;
+  margin-bottom: 10px;
+  letter-spacing: 2px;
+}
+.eval-checklist .eval-lead {
+  font-size: 12px;
+  color: #831843;
+  margin-bottom: 14px;
+  line-height: 1.7;
+}
+.eval-checklist table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  background: #fff;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.eval-checklist th {
+  background: #fce7f3;
+  text-align: left;
+  padding: 8px 12px;
+  font-weight: 700;
+  color: #9d174d;
+  font-size: 12px;
+  border-bottom: 1px solid #f9a8d4;
+}
+.eval-checklist td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #fce7f3;
+  vertical-align: top;
+  line-height: 1.6;
+}
+.eval-checklist tr:last-child td { border-bottom: none; }
+.eval-checklist .signal-name { font-weight: 700; color: #be185d; white-space: nowrap; }
+.eval-checklist .signal-mode { font-family: 'SF Mono', Menlo, monospace; font-size: 11px; background: #fce7f3; padding: 2px 7px; border-radius: 4px; }
+
+/* 페이지 네비게이션 (분리본 푸터) */
+.doc-nav {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid #ccc;
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.doc-nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+  background: #f5f5f5;
+  color: #333;
+  border: 1px solid #ddd;
+  transition: all .15s;
+}
+.doc-nav a:hover { background: #e8e8e8; border-color: #999; }
+.doc-nav a.nav--hub { background: #1a365d; color: #fff; border-color: #1a365d; }
+.doc-nav a.nav--intro { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
+.doc-nav a.nav--body { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
+.doc-nav a.nav--conclusion { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+
+/* 페이지 구분선 */
+.page-divider {
+  border: none;
+  border-top: 1px dashed #ccc;
+  margin: 35px 0;
+}
+
+@media print {
+  body { background: #fff; }
+  .page { box-shadow: none; margin: 0; padding: 30px; }
+  .doc-nav { display: none; }
+}
+@media (max-width: 600px) {
+  .page { padding: 20px 18px 30px; }
+  .structure-cols { grid-template-columns: 1fr; }
+}

@@ -1,26 +1,104 @@
 @import "tailwindcss";
 
+/* Google Fonts(Gowun Dodum, Jua)는 app/layout.tsx의 <link> 태그로 로드됨.
+   Tailwind v4는 @import "tailwindcss"를 inline으로 펼치므로,
+   여기서 추가 @import url(...)을 두면 다른 규칙 뒤로 밀려 CSS spec 위반 발생. */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fffaf0;
+  --foreground: #2a2a2a;
+
+  --font-body: 'Gowun Dodum', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  --font-display: 'Jua', 'Gowun Dodum', sans-serif;
+  --font-serif: 'Gowun Dodum', 'Apple SD Gothic Neo', serif;
+
+  /* 학생 친화 컬러 시스템 */
+  --color-warm: #fef3c7;       /* amber-100 */
+  --color-warm-strong: #f59e0b; /* amber-500 */
+  --color-cool: #e0f2fe;       /* sky-100 */
+  --color-cool-strong: #0ea5e9; /* sky-500 */
+  --color-friend: #fce7f3;     /* pink-100 */
+  --color-go: #10b981;         /* emerald-500 */
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body);
+  font-size: 16px;
+}
+
+/* 학생 친화: 모든 인터랙티브 요소에 미세한 transition */
+button, a, input, textarea, select {
+  transition-property: transform, background-color, box-shadow, border-color;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* 마이크로 인터랙션: 등장 애니메이션 */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-in {
+  animation: fadeIn 280ms ease-out both;
+}
+
+@keyframes popIn {
+  0% { opacity: 0; transform: scale(0.8); }
+  70% { transform: scale(1.05); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.pop-in {
+  animation: popIn 320ms ease-out both;
+}
+
+@keyframes starBurst {
+  0% { opacity: 0; transform: scale(0.3) rotate(-15deg); }
+  60% { opacity: 1; transform: scale(1.2) rotate(10deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0); }
+}
+.star-burst {
+  animation: starBurst 600ms ease-out both;
+}
+
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-5deg); }
+  75% { transform: rotate(5deg); }
+}
+.wiggle {
+  animation: wiggle 500ms ease-in-out;
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.slide-in-right {
+  animation: slideInRight 220ms ease-out both;
+}
+
+/* 글쓰기 영역 — 큰 폰트 + 넓은 줄간격 */
+.draft-input {
+  font-family: var(--font-body);
+  font-size: 17px;
+  line-height: 2;
+  letter-spacing: 0.01em;
+}
+
+/* 제목용 */
+.font-display {
+  font-family: var(--font-display);
 }
