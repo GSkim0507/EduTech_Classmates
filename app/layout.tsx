@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import ToastViewport from '@/components/Toast';
+import BrandHeader from '@/components/BrandHeader';
 
 export const metadata: Metadata = {
   title: 'The Annoying Friend — 깐깐한 친구와 함께 글쓰기',
@@ -26,7 +27,8 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap"
         />
       </head>
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full flex flex-col pt-12">
+        <BrandHeader />
         {children}
         <ToastViewport />
       </body>
