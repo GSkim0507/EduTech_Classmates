@@ -24,6 +24,8 @@ import PrecedingContext from '@/components/PrecedingContext';
 import DictionaryFloater from '@/components/DictionaryFloater';
 
 const API_KEY_STORAGE = 'annoying-classmate:api-key';
+const TUTORIAL_SHOWN_KEY = 'annoying-classmate:tutorial-shown';
+const HELP_PER_CONTEXT = 2; // 문단별·페이즈별 "같이 고민" 카드 2장
 
 const PHASE_LABEL: Record<Exclude<Phase, 'done'>, string> = {
   intro: '서론',
@@ -91,6 +93,26 @@ export default function WritePage({
   // body phase에서 도움받기/보여주기를 어느 문단에 대해 호출했는지 추적
   const [helpForBodyIdx, setHelpForBodyIdx] = useState<number | null>(null);
   const [confirmKind, setConfirmKind] = useState<ConfirmKind>(null);
+  const [tutorialOpen, setTutorialOpen] = useState(false);
+
+  // 첫 진입 시 1회성 안내 (localStorage 기반)
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem(TUTORIAL_SHOWN_KEY)) {
+        setTutorialOpen(true);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+  function dismissTutorial() {
+    try {
+      localStorage.setItem(TUTORIAL_SHOWN_KEY, '1');
+    } catch {
+      // ignore
+    }
+    setTutorialOpen(false);
+  }
 
   const lastSavedRef = useRef<{ phase: Phase; paragraphIdx: number; content: string } | null>(
     null
@@ -291,8 +313,14 @@ export default function WritePage({
     lastSavedRef.current = null;
     scheduleAutosave(content);
   }
-  // body paragraph별 도움/보여주기 핸들러
+  // body paragraph별 도움/설득하기 핸들러
   function handleParagraphHelp(idx: number) {
+    // 카드 잔여 체크 (서버에서 다시 검증되지만 UX 안내)
+    const remaining = helpRemainingByBodyIdx[idx] ?? HELP_PER_CONTEXT;
+    if (remaining <= 0) {
+      setError('이 문단의 도움 카드를 모두 썼어. 친구 설득하기로 평가 받아봐!');
+      return;
+    }
     setHelpForBodyIdx(idx);
     setCurrentBodyIdx(idx);
     lastSavedRef.current = null;
@@ -523,6 +551,30 @@ export default function WritePage({
   // 본론은 모든 paragraph 대화를 다 보여줌 (어느 문단 피드백인지 라벨로 구분)
   const matchingTurns = turns.filter((t) => t.phase === phase);
 
+  // ─── "같이 고민" 카드 카운터 ───
+  // body: 문단별 / 그 외(intro/conclusion/title): phase 단위
+  const helpRemainingByBodyIdx: Record<number, number> = {};
+  if (phase === 'body') {
+    bodyParagraphs.forEach((p) => {
+      const used = turns.filter(
+        (t) =>
+          t.phase === 'body' &&
+          t.paragraph_idx === p.idx &&
+          t.role === 'student' &&
+          t.triggered_by === 'help'
+      ).length;
+      helpRemainingByBodyIdx[p.idx] = Math.max(0, HELP_PER_CONTEXT - used);
+    });
+  }
+  // 전역 (intro/conclusion/title) 카운터
+  const helpRemainingGlobal = (() => {
+    if (phase === 'body') return null;
+    const used = turns.filter(
+      (t) => t.phase === phase && t.role === 'student' && t.triggered_by === 'help'
+    ).length;
+    return Math.max(0, HELP_PER_CONTEXT - used);
+  })();
+
   const phaseIdx = PHASE_ORDER.indexOf(phase);
   const overallProgress = phase === 'body'
     ? (1 + (currentBodyIdx + 0.5) / Math.max(1, bodyParagraphs.length)) / PHASE_ORDER.length * 100
@@ -663,6 +715,7 @@ export default function WritePage({
                     ? helpForBodyIdx
                     : null
                 }
+                helpRemainingByIdx={helpRemainingByBodyIdx}
               />
             )}
             {phase === 'conclusion' && (
@@ -705,25 +758,34 @@ export default function WritePage({
           </div>
 
           <div className="px-6 py-4 border-t-2 border-amber-50 flex flex-wrap gap-2 justify-end">
-            {/* 본론 phase는 문단별 [💭][👀] 버튼 사용. 전역 [💭][👀]은 숨김. */}
-            {phase !== 'body' && (
+            {/* 본론 phase는 문단별 [🤝][🎯] 버튼 사용. 전역은 숨김. */}
+            {phase !== 'body' && helpRemainingGlobal !== null && (
               <>
                 <button
                   onClick={() => {
                     setHelpForBodyIdx(null);
                     setHelpModalOpen(true);
                   }}
-                  disabled={pendingAction !== null}
-                  className="px-5 py-3 rounded-2xl text-base font-bold border-2 border-stone-200 bg-white text-stone-700 hover:bg-stone-50 hover:scale-[1.03] disabled:opacity-50 disabled:hover:scale-100"
+                  disabled={pendingAction !== null || helpRemainingGlobal <= 0}
+                  className="px-5 py-3 rounded-2xl text-base font-bold border-2 border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 hover:scale-[1.03] disabled:opacity-50 disabled:hover:scale-100 flex items-center gap-2"
+                  title={
+                    helpRemainingGlobal <= 0
+                      ? '도움 카드를 다 썼어. 친구 설득하기로 평가 받아봐!'
+                      : `같이 고민 (${helpRemainingGlobal}장 남음)`
+                  }
                 >
-                  💭 도움 받기
+                  🤝 같이 고민해줘
+                  <span className="text-xs font-mono opacity-80">
+                    {'🃏'.repeat(helpRemainingGlobal) +
+                      '·'.repeat(Math.max(0, HELP_PER_CONTEXT - helpRemainingGlobal))}
+                  </span>
                 </button>
                 <button
                   onClick={() => setConfirmKind({ kind: 'submit' })}
                   disabled={pendingAction !== null}
                   className="px-5 py-3 rounded-2xl text-base font-bold bg-amber-400 hover:bg-amber-500 text-white shadow-md hover:scale-[1.03] disabled:opacity-50 disabled:hover:scale-100"
                 >
-                  👀 친구한테 보여주기
+                  🎯 친구 설득하기
                 </button>
               </>
             )}
@@ -824,12 +886,12 @@ export default function WritePage({
         open={confirmKind?.kind === 'submit'}
         title={
           confirmKind?.kind === 'submit' && typeof confirmKind.paragraphIdx === 'number'
-            ? `본론 ${confirmKind.paragraphIdx + 1}문단 보여줄까?`
-            : '친구한테 보여줄까?'
+            ? `본론 ${confirmKind.paragraphIdx + 1}문단으로 친구 설득해볼까?`
+            : '이 글로 친구 설득해볼까?'
         }
-        emoji="👀"
-        message={`네 글을 까칠한 친구가 한 번 봐줄게.\n친구가 약올라할지 잘난 척할지 모르지만 괜찮지?`}
-        confirmText="응, 보여줄게"
+        emoji="🎯"
+        message={`까칠한 친구를 너의 글로 설득해 봐.\n친구가 인정할지 약 올라할지 한번 보자!`}
+        confirmText="응, 설득해볼게"
         cancelText="아직"
         variant="primary"
         onConfirm={() => {
@@ -921,6 +983,63 @@ export default function WritePage({
 
       {/* 좌하단 플로팅 사전 — 모든 페이즈에서 사용 가능 */}
       <DictionaryFloater />
+
+      {/* 1회성 안내 모달 (첫 글쓰기 진입 시) */}
+      {tutorialOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 fade-in">
+          <button
+            type="button"
+            onClick={dismissTutorial}
+            aria-label="닫기"
+            className="absolute inset-0 bg-stone-900/40 backdrop-blur-sm"
+          />
+          <div className="relative bg-white rounded-3xl shadow-2xl border-4 border-amber-100 max-w-md w-full p-6 pop-in">
+            <div className="flex justify-center mb-3">
+              <FriendFace mood="calm" size={88} />
+            </div>
+            <h2 className="font-display text-2xl text-center text-stone-800 mb-2">
+              👋 친구는 두 가지 일을 해!
+            </h2>
+            <p className="text-center text-stone-500 text-sm mb-5">
+              필요할 때 골라서 써 봐.
+            </p>
+
+            <div className="space-y-3 mb-5">
+              <div className="rounded-2xl border-2 border-sky-200 bg-sky-50/60 px-4 py-3">
+                <div className="font-bold text-sky-800 text-base mb-1">
+                  🤝 같이 고민해줘
+                </div>
+                <p className="text-xs text-stone-600 leading-relaxed">
+                  글이 막혔을 때, 같은 팀처럼 옆에서 같이 생각해줘. <br />
+                  <span className="font-bold text-sky-700">
+                    한 곳에서 🃏🃏 두 번 쓸 수 있어.
+                  </span>
+                </p>
+              </div>
+              <div className="rounded-2xl border-2 border-amber-200 bg-amber-50/60 px-4 py-3">
+                <div className="font-bold text-amber-800 text-base mb-1">
+                  🎯 친구 설득하기
+                </div>
+                <p className="text-xs text-stone-600 leading-relaxed">
+                  네 글로 까칠한 친구를 설득해 봐. 평가 받고 싶을 때 써.
+                  <br />
+                  <span className="font-bold text-amber-700">
+                    이건 횟수 제한 없어! 마음껏 도전해 봐.
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={dismissTutorial}
+              className="w-full py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-base shadow-md hover:scale-[1.02] transition"
+            >
+              ✨ 알았어, 시작할게!
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
@@ -945,11 +1064,11 @@ function ChatBubble({ turn }: { turn: TurnRow }) {
               </span>
             )}
             {turn.triggered_by === 'submit' && (
-              <span className="text-xs text-emerald-700 font-bold">👀 보여주기</span>
+              <span className="text-xs text-emerald-700 font-bold">🎯 친구 설득</span>
             )}
             {turn.triggered_by === 'help' && (
-              <span className="text-xs text-emerald-700 font-bold">
-                💭 도움 요청
+              <span className="text-xs text-sky-700 font-bold">
+                🤝 같이 고민
                 {turn.help_domain ? ` (${helpDomainLabel(turn.help_domain)})` : ''}
               </span>
             )}

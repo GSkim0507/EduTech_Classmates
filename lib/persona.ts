@@ -26,6 +26,10 @@ interface PersonaContext {
   preceding?: PrecedingContent;
   /** help trigger인 경우 학생이 명시적으로 선택한 영역 (LLM이 그 영역만 응답) */
   forcedHelpDomain?: 'idea' | 'writing' | 'both' | null;
+  /** 같은 phase·문단에서 학생이 몇 번째로 글을 평가/도움 요청한 시점인지 (0-based) */
+  revisionIdx?: number;
+  /** 직전 같은 위치의 학생 글 (있을 경우 LLM이 변화점을 인식) */
+  previousVersion?: string | null;
 }
 
 const TONE_INSTRUCTION: Record<Tone, string> = {
@@ -108,6 +112,17 @@ export function buildSystemPrompt(ctx: PersonaContext): string {
   const precedingSection = buildPrecedingSection(ctx);
   const helpOverride = buildHelpDomainOverride(ctx);
 
+  // revision 메타데이터 — 학생이 같은 위치의 글을 N번째 가져왔음을 명시
+  let revisionNote = '';
+  if (typeof ctx.revisionIdx === 'number' && ctx.revisionIdx > 0) {
+    const ord = ctx.revisionIdx + 1;
+    revisionNote = `\n## 학생의 수정 이력
+이 ${phaseDetail}에 대해 학생이 너에게 **${ord}번째**로 평가/도움을 요청했다. 학생이 글을 고쳐 다시 가져온 것이므로, 이전 응답을 반복하지 말고 **새로 읽고 새로 평가**해라. 이전 버전과 비교해 어떤 부분이 좋아졌고 어떤 부분이 여전히 아쉬운지 짚어줘도 좋다.`;
+    if (ctx.previousVersion && ctx.previousVersion.trim()) {
+      revisionNote += `\n\n[직전 버전 — 비교용]\n${ctx.previousVersion}`;
+    }
+  }
+
   return `너는 한국 초등학생의 글쓰기를 함께 하는 "잘난척 까칠한 친구(The Annoying Friend)"이다.
 
 ## 너의 정체성
@@ -125,6 +140,7 @@ export function buildSystemPrompt(ctx: PersonaContext): string {
 1. 학생의 글이나 질문에 직접 답을 주지 않는다 (예: "정답은 ~야", "이렇게 써"). 답을 주는 대신 항상 질문으로 되돌린다.
 2. 학생의 글을 대신 작성해주지 않는다. 예시 문장을 통째로 제공하지도 않는다.
 3. 일방적인 칭찬을 하지 않는다 — 인정할 만하면 인정하되, 약점이 보이면 솔직하게 짚는다.
+4. **학생의 수정·재요청을 짜증으로 받지 않는다.** 학생이 같은 문단을 고쳐서 다시 가져오는 것은 정상적인 학습 행동이다. "또 봤어?", "같은 거 또 가져왔네?" 같은 반응은 **절대 금지**. 매번 글을 새로 평가하고, 이전 버전과 비교해 무엇이 바뀌었는지·여전히 무엇이 약한지를 짚는다.
 
 ## 응답 어조 — 학생에게 절대 노출 금지
 다음 표현을 **절대** 사용하지 마라:
@@ -154,7 +170,7 @@ export function buildSystemPrompt(ctx: PersonaContext): string {
 - **어조 모드**: ${tone === 'less-annoying' ? '덜 깐깐한 (less-annoying)' : '깐깐한 (annoying)'}
   → ${TONE_INSTRUCTION[tone]}
 - **대응 영역**: ${domain === 'idea' ? '아이디어' : '글쓰기·논리'}
-  → ${DOMAIN_INSTRUCTION[domain]}${weakestNote}${helpOverride}${precedingSection}${
+  → ${DOMAIN_INSTRUCTION[domain]}${weakestNote}${helpOverride}${revisionNote}${precedingSection}${
     phase === 'title'
       ? `\n\n## 현재는 '제목 정하기' 페이즈
 - 학생이 글의 제목을 짓고 있다.

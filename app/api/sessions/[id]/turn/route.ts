@@ -76,6 +76,36 @@ export async function POST(
     return NextResponse.json({ error: '이미 종료된 세션입니다.' }, { status: 409 });
   }
 
+  // ─── help 카드 잔여 검증 ───
+  // body: 같은 paragraph_idx 단위 / 그 외: phase 단위
+  if (trigger === 'help') {
+    const phaseForCount = session.current_phase as Phase;
+    const paraForCount =
+      phaseForCount === 'body' && body.paragraphIdx !== null && body.paragraphIdx !== undefined
+        ? Number(body.paragraphIdx)
+        : null;
+    const HELP_LIMIT = 2;
+    const allTurnsForLimit = await getAllTurns(id);
+    const usedHelp = allTurnsForLimit.filter((t) => {
+      if (t.role !== 'student') return false;
+      if (t.triggered_by !== 'help') return false;
+      if (t.phase !== phaseForCount) return false;
+      if (phaseForCount === 'body') {
+        return t.paragraph_idx === paraForCount;
+      }
+      return true;
+    }).length;
+    if (usedHelp >= HELP_LIMIT) {
+      return NextResponse.json(
+        {
+          error:
+            '이 부분의 도움 카드를 모두 썼어요. 친구 설득하기로 평가 받아보거나 다음 부분으로 넘어가세요.',
+        },
+        { status: 429 }
+      );
+    }
+  }
+
   const phase = session.current_phase as Exclude<Phase, 'done'>;
   // body 페이즈는 paragraphIdx가 없으면 본론 전체 모드 (UX 단순화)
   const isBodyAllMode =
@@ -238,23 +268,64 @@ export async function POST(
     weakestViolationLabel = lastCalib?.weakest_violation_label ?? null;
   }
 
+  // ─── revision 메타데이터 계산 ───
+  // 같은 phase + paragraph_idx에서 student turn (submit/help)이 몇 번째인지
+  const allTurns = await getAllTurns(id);
+  const sameContextStudentTurns = allTurns.filter((t) => {
+    if (t.role !== 'student') return false;
+    if (t.phase !== phase) return false;
+    if (phase === 'body') {
+      // body 전체 모드(null)와 단일 모드(idx) 구분
+      const targetIdx = isBodyAllMode ? null : paragraphIdx;
+      return t.paragraph_idx === targetIdx;
+    }
+    return true;
+  });
+  const revisionIdx = sameContextStudentTurns.length; // 이번 turn 포함 안 한 직전까지 카운트
+  const previousVersion =
+    revisionIdx > 0
+      ? sameContextStudentTurns[sameContextStudentTurns.length - 1].content
+      : null;
+
   // ─── 시스템 프롬프트 빌드 + LLM 호출 ───
   const systemPrompt = buildSystemPrompt({
     session,
     tone: nextTone,
     domain: nextDomain,
     phase,
-    paragraphIdx: phase === 'body' ? paragraphIdx : null,
+    paragraphIdx: phase === 'body' && !isBodyAllMode ? paragraphIdx : null,
     weakestViolationLabel,
     preceding,
     forcedHelpDomain: trigger === 'help' ? helpDomain ?? null : null,
+    revisionIdx,
+    previousVersion,
   });
 
-  const allTurns = await getAllTurns(id);
-  const messages: ChatMessage[] = allTurns.map((t) => ({
-    role: t.role === 'student' ? ('user' as const) : ('assistant' as const),
-    content: t.content,
-  }));
+  // history 정리: 같은 phase·paragraph 내 마지막 student-assistant pair만 + 다른 phase는 요약 생략
+  // → LLM이 "또 같은 거 봤다" 인지하지 않도록 history를 단순화
+  const recentSameContext = sameContextStudentTurns.slice(-1); // 직전 student turn 하나만
+  const recentSameContextIds = new Set(recentSameContext.map((t) => t.id));
+
+  // 직전 student turn 다음에 오는 assistant turn (같은 idx 또는 그 직후)
+  const recentAssistantIds = new Set<number>();
+  for (const t of allTurns) {
+    if (t.role !== 'assistant') continue;
+    // 같은 phase·paragraph_idx 매칭
+    if (t.phase !== phase) continue;
+    if (phase === 'body') {
+      const targetIdx = isBodyAllMode ? null : paragraphIdx;
+      if (t.paragraph_idx !== targetIdx) continue;
+    }
+    recentAssistantIds.add(t.id);
+  }
+
+  const messages: ChatMessage[] = allTurns
+    .filter((t) => recentSameContextIds.has(t.id) || recentAssistantIds.has(t.id))
+    .slice(-6) // 안전: 최대 최근 6개 turn
+    .map((t) => ({
+      role: t.role === 'student' ? ('user' as const) : ('assistant' as const),
+      content: t.content,
+    }));
 
   let assistantMessage: string;
   try {

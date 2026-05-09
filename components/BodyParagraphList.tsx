@@ -13,17 +13,20 @@ export interface BodyParagraphListProps {
   onChange: (idx: number, content: string) => void;
   onAdd: () => void;            // 최대 5
   onRemove: (idx: number) => void; // 최소 3
-  /** 학생이 이 문단에 대해 도움 요청 */
+  /** 학생이 이 문단에 대해 "🤝 같이 고민해줘" 호출 */
   onHelp: (idx: number) => void;
-  /** 학생이 이 문단을 친구에게 보여주기 */
+  /** 학생이 이 문단으로 "🎯 친구 설득하기" 호출 */
   onShow: (idx: number) => void;
   disabled?: boolean;
   /** 액션 진행 중인 paragraph idx (해당 박스 약간 강조) */
   busyIdx?: number | null;
+  /** 문단별 남은 "같이 고민" 카드 (0~2). 미지정이면 2. */
+  helpRemainingByIdx?: Record<number, number>;
 }
 
 const MIN_PARAGRAPHS = 3;
 const MAX_PARAGRAPHS = 5;
+const HELP_PER_PARAGRAPH = 2;
 
 export default function BodyParagraphList({
   paragraphs,
@@ -34,6 +37,7 @@ export default function BodyParagraphList({
   onShow,
   disabled,
   busyIdx,
+  helpRemainingByIdx,
 }: BodyParagraphListProps) {
   const refs = useRef<(HTMLTextAreaElement | null)[]>([]);
 
@@ -122,28 +126,41 @@ export default function BodyParagraphList({
             />
 
             {/* 문단별 액션 버튼 */}
-            {!isCommitted && (
-              <div className="px-4 pb-3 pt-2 flex flex-wrap gap-2 justify-end border-t border-amber-50">
-                <button
-                  type="button"
-                  onClick={() => onHelp(p.idx)}
-                  disabled={disabled || isEmpty}
-                  className="px-3 py-1.5 rounded-xl text-xs font-bold border-2 border-stone-200 bg-white text-stone-700 hover:bg-stone-50 hover:scale-[1.04] disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed"
-                  title={isEmpty ? '먼저 문단을 조금 써 보자' : `이 문단(${p.idx + 1}문단)에 대해 도움 받기`}
-                >
-                  💭 도움
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onShow(p.idx)}
-                  disabled={disabled || isEmpty}
-                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-400 hover:bg-amber-500 text-white shadow-sm hover:scale-[1.04] disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed"
-                  title={isEmpty ? '먼저 문단을 조금 써 보자' : `이 문단(${p.idx + 1}문단)을 친구한테 보여주기`}
-                >
-                  👀 친구한테 보여주기
-                </button>
-              </div>
-            )}
+            {!isCommitted && (() => {
+              const remaining = helpRemainingByIdx?.[p.idx] ?? HELP_PER_PARAGRAPH;
+              const helpUsedUp = remaining <= 0;
+              const cards =
+                '🃏'.repeat(remaining) + '·'.repeat(Math.max(0, HELP_PER_PARAGRAPH - remaining));
+              return (
+                <div className="px-4 pb-3 pt-2 flex flex-wrap gap-2 items-center justify-end border-t border-amber-50">
+                  <button
+                    type="button"
+                    onClick={() => onHelp(p.idx)}
+                    disabled={disabled || isEmpty || helpUsedUp}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold border-2 border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 hover:scale-[1.04] disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed flex items-center gap-1.5"
+                    title={
+                      helpUsedUp
+                        ? '이 문단의 도움 카드를 다 썼어. 친구 설득하기로 평가 받아봐!'
+                        : isEmpty
+                          ? '먼저 문단을 조금 써 보자'
+                          : `이 문단에 대해 같이 고민하기 (${remaining}장 남음)`
+                    }
+                  >
+                    🤝 같이 고민해줘
+                    <span className="text-[11px] font-mono opacity-80">{cards}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onShow(p.idx)}
+                    disabled={disabled || isEmpty}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-400 hover:bg-amber-500 text-white shadow-sm hover:scale-[1.04] disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed"
+                    title={isEmpty ? '먼저 문단을 조금 써 보자' : `이 문단으로 친구 설득하기`}
+                  >
+                    🎯 친구 설득하기
+                  </button>
+                </div>
+              );
+            })()}
           </div>
         );
       })}
