@@ -9,22 +9,24 @@ import Image from 'next/image';
  */
 export default function BrandHeader() {
   return (
-    <header className="fixed top-0 left-0 right-0 z-[60] h-12 bg-amber-50/95 backdrop-blur-sm border-b border-amber-100 flex items-center justify-start px-4 sm:px-6">
+    <header className="fixed top-0 left-0 right-0 z-[60] h-16 bg-amber-50/95 backdrop-blur-sm border-b border-amber-100 flex items-center justify-center px-4 sm:px-6">
       <a
         href="/"
-        className="inline-flex items-center gap-2 px-2 py-1 rounded-full hover:bg-white/70 transition"
-        aria-label="The Annoying Classmates 홈"
+        className="inline-flex items-center gap-3 px-2 py-1 rounded-full hover:bg-white/70 transition"
+        aria-label="The Annoying Friend 홈"
       >
-        <Image
-          src="/byeolha-symbol.png"
-          alt=""
-          width={45}
-          height={32}
-          priority
-          className="h-7 w-auto"
-        />
-        <span className="font-display text-base sm:text-lg text-amber-700 tracking-tight whitespace-nowrap">
-          The Annoying Classmates
+        <span className="inline-flex items-center justify-center bg-white rounded-full shadow-sm border border-amber-100 px-2.5 py-1.5">
+          <Image
+            src="/byeolha-symbol.png"
+            alt=""
+            width={60}
+            height={42}
+            priority
+            className="h-9 w-auto"
+          />
+        </span>
+        <span className="font-display text-2xl sm:text-3xl text-amber-700 tracking-tight whitespace-nowrap">
+          The Annoying Friend
         </span>
       </a>
     </header>

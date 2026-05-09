@@ -27,7 +27,7 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap"
         />
       </head>
-      <body className="min-h-full flex flex-col pt-12">
+      <body className="min-h-full flex flex-col pt-16">
         <BrandHeader />
         {children}
         <ToastViewport />
