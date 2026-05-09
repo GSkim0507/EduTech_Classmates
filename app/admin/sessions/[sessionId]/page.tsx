@@ -9,6 +9,7 @@ import type {
   CalibrationRow,
   ClosureRow,
 } from '@/lib/types';
+import DraftDiff from '@/components/admin/DraftDiff';
 
 interface DetailResponse {
   session: SessionRow;
@@ -18,7 +19,7 @@ interface DetailResponse {
   closure: ClosureRow | null;
 }
 
-type Tab = 'timeline' | 'drafts' | 'turns' | 'calibrations' | 'closure' | 'raw';
+type Tab = 'timeline' | 'drafts' | 'diff' | 'turns' | 'calibrations' | 'closure' | 'raw';
 
 export default function AdminSessionDetail({
   params,
@@ -104,28 +105,29 @@ export default function AdminSessionDetail({
         </div>
 
         {/* 탭 */}
-        <nav className="flex gap-1 border-b border-slate-300 mb-4">
-          {(['timeline', 'drafts', 'turns', 'calibrations', 'closure', 'raw'] as Tab[]).map(
-            (t) => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={`px-3 py-2 text-xs font-medium ${
-                  tab === t
-                    ? 'border-b-2 border-slate-800 text-slate-900'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                {tabLabel(t)}
-              </button>
-            )
-          )}
+        <nav className="flex gap-1 border-b border-slate-300 mb-4 flex-wrap">
+          {(
+            ['timeline', 'drafts', 'diff', 'turns', 'calibrations', 'closure', 'raw'] as Tab[]
+          ).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`px-3 py-2 text-xs font-medium ${
+                tab === t
+                  ? 'border-b-2 border-slate-800 text-slate-900'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {tabLabel(t)}
+            </button>
+          ))}
         </nav>
 
         {/* 탭 내용 */}
         <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4">
           {tab === 'timeline' && <TimelineView drafts={drafts} turns={turns} />}
           {tab === 'drafts' && <DraftsView drafts={drafts} />}
+          {tab === 'diff' && <DiffView drafts={drafts} />}
           {tab === 'turns' && <TurnsView turns={turns} />}
           {tab === 'calibrations' && <CalibrationsView calibrations={calibrations} />}
           {tab === 'closure' && <ClosureView closure={closure} />}
@@ -144,6 +146,7 @@ function tabLabel(t: Tab): string {
   return {
     timeline: '타임라인',
     drafts: '글 수정 기록',
+    diff: '🔀 변화 비교',
     turns: '대화',
     calibrations: '재조정',
     closure: 'Closure',
@@ -353,6 +356,102 @@ function CalibrationsView({ calibrations }: { calibrations: CalibrationRow[] }) 
               {JSON.stringify(signals, null, 2)}
             </pre>
           </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function DiffView({ drafts }: { drafts: DraftRow[] }) {
+  // 같은 (phase, paragraph_idx)별 그룹화 + 시간순 정렬
+  const groups = new Map<string, DraftRow[]>();
+  for (const d of drafts) {
+    const key = `${d.phase}-${d.paragraph_idx}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(d);
+  }
+  // 각 그룹은 id 순으로 정렬됨 (이미 SQL ORDER BY id)
+
+  // 표시 순서: phase 순 → paragraph_idx 순
+  const phaseOrder = ['intro', 'body', 'conclusion', 'title'];
+  const sortedKeys = Array.from(groups.keys()).sort((a, b) => {
+    const [pa, ia] = a.split('-');
+    const [pb, ib] = b.split('-');
+    const pd = phaseOrder.indexOf(pa) - phaseOrder.indexOf(pb);
+    if (pd !== 0) return pd;
+    return Number(ia) - Number(ib);
+  });
+
+  if (sortedKeys.length === 0) {
+    return <div className="text-sm text-slate-400">아직 draft가 없습니다.</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <p className="text-xs text-slate-500">
+        같은 페이즈·문단 안에서 학생이 글을 어떻게 바꿔갔는지 char-level diff로 보여줍니다. 추가
+        = <span className="bg-emerald-100 text-emerald-900 px-1 rounded">초록</span> · 삭제 ={' '}
+        <span className="bg-rose-100 text-rose-700 line-through px-1 rounded">빨강</span>
+      </p>
+      {sortedKeys.map((key) => {
+        const group = groups.get(key)!;
+        const [phase, idx] = key.split('-');
+        const phaseLabel =
+          phase === 'intro'
+            ? '서론'
+            : phase === 'body'
+              ? `본론 ${Number(idx) + 1}문단`
+              : phase === 'conclusion'
+                ? '결론'
+                : '제목';
+
+        return (
+          <section key={key} className="border border-slate-200 rounded-lg p-3">
+            <h3 className="text-sm font-semibold text-slate-800 mb-3">
+              {phaseLabel}{' '}
+              <span className="text-xs text-slate-400 font-normal">
+                ({group.length}개 revision)
+              </span>
+            </h3>
+            <div className="space-y-3">
+              {group.map((d, i) => {
+                const prev = i > 0 ? group[i - 1] : null;
+                return (
+                  <div key={d.id} className="text-xs">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <span className="font-mono text-slate-400">#{d.id}</span>
+                      <span
+                        className={`px-1.5 py-0.5 rounded font-bold ${
+                          d.source === 'committed'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : d.source === 'student_revise'
+                              ? 'bg-amber-100 text-amber-700'
+                              : d.source === 'regress_uncommit'
+                                ? 'bg-rose-100 text-rose-700'
+                                : 'bg-blue-100 text-blue-700'
+                        }`}
+                      >
+                        {d.source}
+                      </span>
+                      <span className="text-slate-400">{formatTs(d.timestamp)}</span>
+                    </div>
+                    {prev ? (
+                      <DraftDiff previous={prev.content} current={d.content} />
+                    ) : (
+                      <div className="text-xs font-serif whitespace-pre-wrap break-words bg-slate-50 border border-slate-200 rounded p-3 text-slate-700">
+                        <span className="text-[10px] text-slate-400 mb-1 block font-mono">
+                          (첫 revision)
+                        </span>
+                        {d.content || (
+                          <span className="italic text-slate-400">(빈 글)</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
         );
       })}
     </div>

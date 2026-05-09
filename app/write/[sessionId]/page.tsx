@@ -312,10 +312,6 @@ export default function WritePage({
   async function handleHelpDomain(domain: HelpDomain) {
     setHelpModalOpen(false);
     setError(null);
-    if (!apiKey.trim()) {
-      setError('Claude API 키가 필요해. 로비에서 다시 들어와줘.');
-      return;
-    }
     const text = getCurrentText();
     if (!text.trim()) {
       setError('일단 글을 조금 써 봐.');
@@ -348,10 +344,6 @@ export default function WritePage({
   // ─── 친구한테 보여주기 (submit) ───
   async function performSubmit() {
     setError(null);
-    if (!apiKey.trim()) {
-      setError('Claude API 키가 필요해.');
-      return;
-    }
     const text = getCurrentText();
     if (!text.trim()) {
       setError('일단 글을 조금 써 봐.');

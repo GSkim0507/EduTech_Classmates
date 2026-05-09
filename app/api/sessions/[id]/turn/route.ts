@@ -53,10 +53,15 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { apiKey, trigger, helpDomain, studentMessage } = body;
+  const { trigger, helpDomain, studentMessage } = body;
+  // 클라이언트 입력 우선, 없으면 서버 환경변수 fallback
+  const apiKey = body.apiKey?.trim() || process.env.ANTHROPIC_API_KEY;
 
-  if (!apiKey?.trim()) {
-    return NextResponse.json({ error: 'Claude API 키가 필요합니다.' }, { status: 400 });
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: 'Claude API 키가 설정되지 않았습니다 (서버 환경변수 + 클라이언트 입력 모두 비어있음).' },
+      { status: 400 }
+    );
   }
   if (!VALID_TRIGGERS.includes(trigger as 'submit' | 'help')) {
     return NextResponse.json({ error: 'Invalid trigger (submit | help)' }, { status: 400 });

@@ -51,10 +51,6 @@ export default function LobbyPage() {
   async function handleStart(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!apiKey.trim()) {
-      setError('Claude API 키를 먼저 넣어줘.');
-      return;
-    }
     if (!personaName.trim() || !topic.trim()) {
       setError('별명이랑 주제를 같이 적어줘.');
       return;
@@ -90,10 +86,6 @@ export default function LobbyPage() {
   async function handleResume(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!apiKey.trim()) {
-      setError('Claude API 키를 먼저 넣어줘.');
-      return;
-    }
     if (!resumeId.trim()) {
       setError('이어서 쓸 세션 ID를 넣어줘.');
       return;
@@ -119,10 +111,6 @@ export default function LobbyPage() {
 
   function handleQuickResume(id: string) {
     setError(null);
-    if (!apiKey.trim()) {
-      setError('Claude API 키를 먼저 넣어줘.');
-      return;
-    }
     persistApiKey(apiKey);
     router.push(`/write/${id}`);
   }
@@ -147,16 +135,16 @@ export default function LobbyPage() {
         <section className="bg-white rounded-3xl shadow-md border-2 border-amber-100 p-6 mb-5 fade-in">
           <label className="block">
             <span className="font-display text-lg text-amber-700 flex items-center gap-2">
-              🔑 Claude API 키
+              🔑 Claude API 키 <span className="text-xs font-normal text-stone-400">(선택)</span>
             </span>
             <p className="text-xs text-stone-500 mt-1 mb-3">
-              매 탭마다 한 번 넣어줘. 우리 서버에는 저장 안 해.
+              비워두면 서버에 등록된 키로 자동 사용해. 본인 키를 쓰고 싶을 때만 입력.
             </p>
             <input
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder="sk-ant-api03-..."
+              placeholder="sk-ant-api03-...  (비워두면 서버 키)"
               className="w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-base font-mono focus:outline-none focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
               autoComplete="off"
             />
