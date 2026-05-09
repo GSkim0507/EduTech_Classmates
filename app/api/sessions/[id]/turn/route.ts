@@ -77,16 +77,31 @@ export async function POST(
   }
 
   const phase = session.current_phase as Exclude<Phase, 'done'>;
-  const paragraphIdx =
-    typeof body.paragraphIdx === 'number'
-      ? body.paragraphIdx
-      : phase === 'body'
-        ? 0
-        : 0;
+  // body 페이즈는 paragraphIdx가 없으면 본론 전체 모드 (UX 단순화)
+  const isBodyAllMode =
+    phase === 'body' && (body.paragraphIdx === null || body.paragraphIdx === undefined);
+  const paragraphIdx = typeof body.paragraphIdx === 'number' ? body.paragraphIdx : 0;
 
   // ─── 학생 turn 저장 ───
-  const latestDraft = await getLatestDraftParagraph(id, phase, paragraphIdx);
-  const studentContent = studentMessage?.trim() || latestDraft?.content || '';
+  // body 전체 모드 — 모든 paragraph의 최신 draft를 합침
+  let latestDraft: Awaited<ReturnType<typeof getLatestDraftParagraph>> = null;
+  let combinedDraftText = '';
+  if (isBodyAllMode) {
+    // 본론 모든 paragraph (0~4) 중 작성된 것 합침
+    const parts: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const d = await getLatestDraftParagraph(id, phase, i);
+      if (d?.content?.trim()) {
+        parts.push(`(${i + 1}문단) ${d.content}`);
+        if (!latestDraft) latestDraft = d; // 대표 draft (logging용)
+      }
+    }
+    combinedDraftText = parts.join('\n\n');
+  } else {
+    latestDraft = await getLatestDraftParagraph(id, phase, paragraphIdx);
+    combinedDraftText = latestDraft?.content || '';
+  }
+  const studentContent = studentMessage?.trim() || combinedDraftText || '';
 
   if (!studentContent.trim()) {
     return NextResponse.json(
@@ -105,7 +120,8 @@ export async function POST(
       id,
       studentIdx,
       phase,
-      phase === 'body' ? paragraphIdx : null,
+      // body 전체 모드면 paragraph_idx=null, 단일 모드면 idx
+      phase === 'body' && !isBodyAllMode ? paragraphIdx : null,
       studentContent,
       trigger,
       trigger === 'help' ? (helpDomain ?? null) : null,
@@ -144,15 +160,17 @@ export async function POST(
   let curriculumSignals: CurriculumSignals | null = null;
   let calibrationId: number | null = null;
 
-  if (trigger === 'submit' && latestDraft) {
+  if (trigger === 'submit' && (latestDraft || isBodyAllMode)) {
     // LLM 평가 (5 평가요소 + 헌법 신호)
+    // body 전체 모드면 combinedDraftText 사용, 단일 모드면 latestDraft.content
+    const evalDraftText = isBodyAllMode ? combinedDraftText : (latestDraft?.content ?? '');
     try {
       const evalResult = await evaluateDraft({
         apiKey,
-        draftText: latestDraft.content,
+        draftText: evalDraftText,
         phase,
         topic: session.topic,
-        paragraphIdx: phase === 'body' ? paragraphIdx : undefined,
+        paragraphIdx: phase === 'body' && !isBodyAllMode ? paragraphIdx : undefined,
         preceding,
       });
       signals = { ...evalResult.scores, notes: evalResult.notes };
@@ -165,18 +183,23 @@ export async function POST(
     signals.help_request_count = await getHelpCount(
       id,
       phase,
-      phase === 'body' ? paragraphIdx : null
+      phase === 'body' && !isBodyAllMode ? paragraphIdx : null
     );
     signals.self_revision_count = await getRevisionCount(
       id,
       phase,
-      phase === 'body' ? paragraphIdx : null
+      phase === 'body' && !isBodyAllMode ? paragraphIdx : null
     );
-    signals.response_complexity = computeResponseComplexity(latestDraft.content);
-    signals.lexical_diversity = computeLexicalDiversity(latestDraft.content);
+    signals.response_complexity = computeResponseComplexity(evalDraftText);
+    signals.lexical_diversity = computeLexicalDiversity(evalDraftText);
 
     // calibrate
-    const calib = calibrate({ phase, paragraphIdx, signals, curriculumSignals });
+    const calib = calibrate({
+      phase,
+      paragraphIdx: phase === 'body' && !isBodyAllMode ? paragraphIdx : undefined,
+      signals,
+      curriculumSignals,
+    });
     nextTone = calib.nextTone;
     nextDomain = calib.nextDomain;
     weakestViolationLabel = calib.weakestViolationLabel;
@@ -191,8 +214,8 @@ export async function POST(
       args: [
         id,
         phase,
-        phase === 'body' ? paragraphIdx : null,
-        latestDraft.id,
+        phase === 'body' && !isBodyAllMode ? paragraphIdx : null,
+        latestDraft?.id ?? 0,
         JSON.stringify(signals),
         curriculumSignals ? JSON.stringify(curriculumSignals) : null,
         nextTone,
@@ -264,7 +287,7 @@ export async function POST(
       id,
       assistantIdx,
       phase,
-      phase === 'body' ? paragraphIdx : null,
+      phase === 'body' && !isBodyAllMode ? paragraphIdx : null,
       assistantMessage,
       trigger,
       trigger === 'help' ? (helpDomain ?? null) : null,

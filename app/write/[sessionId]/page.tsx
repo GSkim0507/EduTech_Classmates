@@ -21,6 +21,7 @@ import BodyParagraphList, {
 } from '@/components/BodyParagraphList';
 import WinGauge from '@/components/WinGauge';
 import PrecedingContext from '@/components/PrecedingContext';
+import DictionaryFloater from '@/components/DictionaryFloater';
 
 const API_KEY_STORAGE = 'annoying-classmate:api-key';
 
@@ -283,13 +284,10 @@ export default function WritePage({
   }
   function handleBodyChange(idx: number, content: string) {
     setBodyParagraphs((prev) => prev.map((p) => (p.idx === idx ? { ...p, content } : p)));
-    if (idx === currentBodyIdx) scheduleAutosave(content);
-  }
-  function handleBodySelect(idx: number) {
-    if (idx === currentBodyIdx) return;
+    // 입력한 paragraph로 currentBodyIdx 동적 변경 (autosave 대상)
     setCurrentBodyIdx(idx);
-    setHasFeedbackForCurrent(false);
     lastSavedRef.current = null;
+    scheduleAutosave(content);
   }
   function handleBodyAdd() {
     setBodyParagraphs((prev) =>
@@ -326,7 +324,8 @@ export default function WritePage({
         body: JSON.stringify({
           apiKey,
           trigger: 'help',
-          paragraphIdx: phase === 'body' ? currentParagraphIdx : null,
+          // body 페이즈는 전체 모드 (paragraphIdx 안 보냄)
+          paragraphIdx: phase === 'body' ? null : 0,
           helpDomain: domain,
         }),
       });
@@ -358,7 +357,8 @@ export default function WritePage({
         body: JSON.stringify({
           apiKey,
           trigger: 'submit',
-          paragraphIdx: phase === 'body' ? currentParagraphIdx : null,
+          // body 페이즈는 전체 모드
+          paragraphIdx: phase === 'body' ? null : 0,
         }),
       });
       const data = await res.json();
@@ -388,7 +388,8 @@ export default function WritePage({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           phase,
-          paragraphIdx: currentParagraphIdx,
+          // body 페이즈는 전체 commit 모드 (paragraphIdx 안 보냄)
+          paragraphIdx: phase === 'body' ? null : 0,
           bodyParagraphCount: phase === 'body' ? bodyParagraphs.length : undefined,
         }),
       });
@@ -410,7 +411,7 @@ export default function WritePage({
       } else {
         const label =
           phase === 'body'
-            ? `본론 ${currentParagraphIdx + 1}문단 완료!`
+            ? `본론 모두 확정 완료!`
             : `${PHASE_LABEL[phase]} 완료!`;
         showToast(label, { emoji: '⭐' });
         setHasFeedbackForCurrent(false);
@@ -578,7 +579,7 @@ export default function WritePage({
             <div className="flex items-baseline justify-between">
               <h2 className="font-display text-2xl text-amber-700">
                 ✏️ {PHASE_LABEL[phase]}{' '}
-                {phase === 'body' && `(${currentBodyIdx + 1}/${bodyParagraphs.length}문단)`}{' '}
+                {phase === 'body' && `(${bodyParagraphs.length}문단)`}{' '}
                 쓰기
               </h2>
               <span className="text-xs text-stone-400 font-bold">
@@ -590,17 +591,14 @@ export default function WritePage({
             </p>
           </div>
 
-          {/* PrecedingContext (본론 i>0 또는 결론 또는 제목) */}
-          {(phase === 'body' && currentBodyIdx > 0) ||
-          phase === 'conclusion' ||
-          phase === 'title' ? (
+          {/* PrecedingContext: 본론(서론 commit 표시), 결론, 제목 페이즈 */}
+          {phase === 'body' || phase === 'conclusion' || phase === 'title' ? (
             <div className="px-5 pt-4">
               <PrecedingContext
                 intro={introCommit?.content}
                 bodyParagraphs={bodyCommitsByIdx}
                 conclusion={conclusionCommitContent}
                 currentPhase={phase as 'body' | 'conclusion' | 'title'}
-                currentParagraphIdx={phase === 'body' ? currentBodyIdx : undefined}
               />
             </div>
           ) : null}
@@ -622,11 +620,9 @@ export default function WritePage({
             {phase === 'body' && (
               <BodyParagraphList
                 paragraphs={bodyParagraphs}
-                currentParagraphIdx={currentBodyIdx}
                 onChange={handleBodyChange}
                 onAdd={handleBodyAdd}
                 onRemove={handleBodyRemove}
-                onSelect={handleBodySelect}
                 disabled={pendingAction !== null}
               />
             )}
@@ -791,7 +787,7 @@ export default function WritePage({
         open={confirmKind?.kind === 'commit'}
         title={
           phase === 'body'
-            ? `본론 ${currentParagraphIdx + 1}문단 확정?`
+            ? '본론 다 썼어? 결론으로 갈까?'
             : phase === 'conclusion'
               ? '결론 확정하고 제목 정하러 갈까?'
               : '다음으로 넘어갈까?'
@@ -799,11 +795,7 @@ export default function WritePage({
         emoji="➡️"
         message={
           phase === 'body'
-            ? `본론 ${currentParagraphIdx + 1}문단을 확정하면\n${
-                currentParagraphIdx === bodyParagraphs.length - 1
-                  ? '결론으로 넘어가.'
-                  : `본론 ${currentParagraphIdx + 2}문단으로 넘어가.`
-              }\n나중에 다시 돌아올 수는 있어!`
+            ? `본론 ${bodyParagraphs.length}문단을 모두 확정하면 결론으로 넘어가.\n나중에 다시 돌아올 수는 있어!`
             : phase === 'conclusion'
               ? '결론까지 다 썼네! 이제 글의 제목을 정할 차례야.\n나중에 다시 돌아올 수 있어.'
               : `이 ${PHASE_LABEL[phase]}은 이 정도면 됐다고 생각하는 거지?\n다음 단계로 넘어가도 나중에 돌아올 수 있어.`
@@ -857,7 +849,7 @@ export default function WritePage({
       />
 
       {error && (
-        <div className="fixed bottom-4 right-4 max-w-md rounded-2xl bg-rose-50 border-2 border-rose-200 px-4 py-3 text-sm text-rose-700 shadow-lg pop-in">
+        <div className="fixed bottom-4 right-4 max-w-md rounded-2xl bg-rose-50 border-2 border-rose-200 px-4 py-3 text-sm text-rose-700 shadow-lg pop-in z-50">
           <div className="font-bold mb-1">⚠️ 오류</div>
           <div>{error}</div>
           <button
@@ -869,6 +861,9 @@ export default function WritePage({
           </button>
         </div>
       )}
+
+      {/* 좌하단 플로팅 사전 — 모든 페이즈에서 사용 가능 */}
+      <DictionaryFloater />
     </main>
   );
 }

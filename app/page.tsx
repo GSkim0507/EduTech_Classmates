@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import FriendFace from '@/components/FriendFace';
 import { showToast } from '@/components/Toast';
 
-const API_KEY_STORAGE = 'annoying-classmate:api-key';
 const RECENT_SESSIONS_STORAGE = 'annoying-classmate:recent-sessions';
 
 interface RecentSession {
@@ -17,18 +16,16 @@ interface RecentSession {
 
 export default function LobbyPage() {
   const router = useRouter();
-  const [apiKey, setApiKey] = useState('');
   const [personaName, setPersonaName] = useState('');
   const [grade, setGrade] = useState<4 | 5 | 6>(5);
   const [topic, setTopic] = useState('');
   const [resumeId, setResumeId] = useState('');
+  const [resumeModalOpen, setResumeModalOpen] = useState(false);
   const [recentSessions, setRecentSessions] = useState<RecentSession[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const cached = sessionStorage.getItem(API_KEY_STORAGE);
-    if (cached) setApiKey(cached);
     try {
       const recents = JSON.parse(localStorage.getItem(RECENT_SESSIONS_STORAGE) ?? '[]');
       if (Array.isArray(recents)) setRecentSessions(recents.slice(0, 5));
@@ -44,10 +41,6 @@ export default function LobbyPage() {
     localStorage.setItem(RECENT_SESSIONS_STORAGE, JSON.stringify(next));
   }
 
-  function persistApiKey(key: string) {
-    if (key.trim()) sessionStorage.setItem(API_KEY_STORAGE, key.trim());
-  }
-
   async function handleStart(e: FormEvent) {
     e.preventDefault();
     setError(null);
@@ -56,7 +49,6 @@ export default function LobbyPage() {
       return;
     }
     setSubmitting(true);
-    persistApiKey(apiKey);
     try {
       const res = await fetch('/api/sessions', {
         method: 'POST',
@@ -83,19 +75,18 @@ export default function LobbyPage() {
     }
   }
 
-  async function handleResume(e: FormEvent) {
+  async function handleResumeSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     if (!resumeId.trim()) {
-      setError('이어서 쓸 세션 ID를 넣어줘.');
+      setError('세션 번호를 입력해 줘.');
       return;
     }
     setSubmitting(true);
-    persistApiKey(apiKey);
     try {
       const res = await fetch(`/api/sessions/${resumeId.trim()}`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? '세션을 못 찾았어.');
+      if (!res.ok) throw new Error(data.error ?? '세션을 못 찾았어. 번호를 확인해 줘.');
       rememberSession({
         id: data.session.id,
         personaName: data.session.persona_name,
@@ -111,7 +102,6 @@ export default function LobbyPage() {
 
   function handleQuickResume(id: string) {
     setError(null);
-    persistApiKey(apiKey);
     router.push(`/write/${id}`);
   }
 
@@ -130,26 +120,6 @@ export default function LobbyPage() {
             나랑 같이 주장 글쓰기 해볼래? 답은 안 알려줄 거야 😏
           </p>
         </header>
-
-        {/* API 키 */}
-        <section className="bg-white rounded-3xl shadow-md border-2 border-amber-100 p-6 mb-5 fade-in">
-          <label className="block">
-            <span className="font-display text-lg text-amber-700 flex items-center gap-2">
-              🔑 Claude API 키 <span className="text-xs font-normal text-stone-400">(선택)</span>
-            </span>
-            <p className="text-xs text-stone-500 mt-1 mb-3">
-              비워두면 서버에 등록된 키로 자동 사용해. 본인 키를 쓰고 싶을 때만 입력.
-            </p>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="sk-ant-api03-...  (비워두면 서버 키)"
-              className="w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-base font-mono focus:outline-none focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
-              autoComplete="off"
-            />
-          </label>
-        </section>
 
         {/* 새 글쓰기 시작 */}
         <section className="bg-white rounded-3xl shadow-md border-2 border-amber-100 p-6 mb-5 fade-in">
@@ -216,35 +186,29 @@ export default function LobbyPage() {
 
         {/* 이어서 쓰기 */}
         <section className="bg-white rounded-3xl shadow-md border-2 border-sky-100 p-6 mb-5 fade-in">
-          <h2 className="font-display text-2xl text-stone-800 mb-4 flex items-center gap-2">
+          <h2 className="font-display text-2xl text-stone-800 mb-2 flex items-center gap-2">
             📂 이어서 쓰기
           </h2>
-          <form onSubmit={handleResume} className="space-y-3">
-            <label className="block">
-              <span className="text-sm font-bold text-stone-700">세션 ID</span>
-              <input
-                type="text"
-                value={resumeId}
-                onChange={(e) => setResumeId(e.target.value)}
-                placeholder="aBc123XyZ4De"
-                spellCheck={false}
-                autoCorrect="off"
-                className="mt-1 w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-base font-mono focus:outline-none focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-              />
-            </label>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full rounded-2xl bg-sky-500 hover:bg-sky-600 disabled:bg-stone-300 text-white font-bold py-3.5 text-base shadow-md transition hover:scale-[1.02]"
-            >
-              📖 이어서 쓰기
-            </button>
-          </form>
+          <p className="text-sm text-stone-600 mb-4 leading-relaxed">
+            이전에 쓰던 글을 이어서 작업합니다.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              setResumeId('');
+              setResumeModalOpen(true);
+            }}
+            disabled={submitting}
+            className="w-full rounded-2xl bg-sky-500 hover:bg-sky-600 disabled:bg-stone-300 text-white font-bold py-3.5 text-base shadow-md transition hover:scale-[1.02]"
+          >
+            📖 이어서 쓰기
+          </button>
 
           {recentSessions.length > 0 && (
             <div className="mt-5 pt-4 border-t-2 border-stone-100">
               <h3 className="text-xs font-bold text-stone-500 uppercase tracking-wide mb-3">
-                최근에 쓴 글
+                이 기기에서 최근에 쓴 글
               </h3>
               <ul className="space-y-2">
                 {recentSessions.map((s) => (
@@ -278,6 +242,62 @@ export default function LobbyPage() {
           ICCE 2026 prototype · LC paradigm grounded in 2022 Korean National Curriculum
         </footer>
       </div>
+
+      {/* 이어쓰기 모달 */}
+      {resumeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 fade-in">
+          <button
+            type="button"
+            onClick={() => setResumeModalOpen(false)}
+            aria-label="닫기"
+            className="absolute inset-0 bg-stone-900/40 backdrop-blur-sm"
+          />
+          <form
+            onSubmit={handleResumeSubmit}
+            className="relative bg-white rounded-3xl shadow-2xl border-4 border-sky-100 max-w-md w-full p-6 pop-in"
+          >
+            <div className="text-5xl text-center mb-3">📂</div>
+            <h2 className="font-display text-2xl text-center text-stone-800 mb-3">
+              이어서 쓰기
+            </h2>
+            <p className="text-center text-stone-600 text-sm mb-5 leading-relaxed">
+              <span className="font-bold text-sky-700">선생님께 본인의 별명을</span>
+              <br />
+              <span className="font-bold text-sky-700">말씀드리고 세션 번호를 요청하세요.</span>
+            </p>
+            <label className="block mb-4">
+              <span className="text-sm font-bold text-stone-700">세션 번호</span>
+              <input
+                type="text"
+                value={resumeId}
+                onChange={(e) => setResumeId(e.target.value)}
+                placeholder="예: aBc123XyZ4De"
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
+                autoFocus
+                className="mt-1 w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-base font-mono focus:outline-none focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+              />
+            </label>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setResumeModalOpen(false)}
+                className="flex-1 py-3 rounded-2xl border-2 border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-700 font-bold text-sm"
+              >
+                취소
+              </button>
+              <button
+                type="submit"
+                disabled={submitting || !resumeId.trim()}
+                className="flex-1 py-3 rounded-2xl bg-sky-500 hover:bg-sky-600 disabled:bg-stone-300 text-white font-bold text-sm shadow-md hover:scale-[1.02] transition"
+              >
+                {submitting ? '확인 중...' : '✅ 확인'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </main>
   );
 }

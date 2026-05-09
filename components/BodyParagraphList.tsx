@@ -10,11 +10,12 @@ export interface BodyParagraph {
 
 export interface BodyParagraphListProps {
   paragraphs: BodyParagraph[];
-  currentParagraphIdx: number;
+  /** 강조 안 함 모드(본론 전체 자유 편집)에서는 -1 또는 미지정 */
+  currentParagraphIdx?: number;
   onChange: (idx: number, content: string) => void;
   onAdd: () => void;            // 최대 5
   onRemove: (idx: number) => void; // 최소 3
-  onSelect: (idx: number) => void;
+  onSelect?: (idx: number) => void;
   disabled?: boolean;            // 전체 비활성 (api 호출 중)
 }
 
@@ -23,24 +24,20 @@ const MAX_PARAGRAPHS = 5;
 
 export default function BodyParagraphList({
   paragraphs,
-  currentParagraphIdx,
   onChange,
   onAdd,
   onRemove,
-  onSelect,
   disabled,
 }: BodyParagraphListProps) {
   const refs = useRef<(HTMLTextAreaElement | null)[]>([]);
 
-  // 현재 작업 중인 textarea로 자동 포커스 (commit 후 다음 문단 진입 시)
+  // 새 문단 추가되면 그 문단으로 자동 포커스
   useEffect(() => {
-    const ta = refs.current[currentParagraphIdx];
-    if (ta && !paragraphs[currentParagraphIdx]?.committed) {
-      // 첫 진입이 아닌 경우만 자동 포커스 (사용자가 다른 textarea에 input 중일 때 방해 안 함)
-      const isEmpty = !paragraphs[currentParagraphIdx]?.content;
-      if (isEmpty) ta.focus();
+    const last = paragraphs[paragraphs.length - 1];
+    if (last && !last.committed && !last.content) {
+      refs.current[last.idx]?.focus();
     }
-  }, [currentParagraphIdx, paragraphs]);
+  }, [paragraphs.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const canAdd = paragraphs.length < MAX_PARAGRAPHS;
   const canRemove = paragraphs.length > MIN_PARAGRAPHS;
@@ -48,7 +45,6 @@ export default function BodyParagraphList({
   return (
     <div className="space-y-4">
       {paragraphs.map((p) => {
-        const isCurrent = p.idx === currentParagraphIdx;
         const isCommitted = p.committed;
 
         return (
@@ -57,13 +53,8 @@ export default function BodyParagraphList({
             className={`rounded-2xl border-2 transition ${
               isCommitted
                 ? 'border-emerald-200 bg-emerald-50/40'
-                : isCurrent
-                  ? 'border-amber-400 bg-white shadow-md scale-[1.005]'
-                  : 'border-stone-200 bg-white'
+                : 'border-amber-200 bg-white hover:border-amber-300'
             }`}
-            onClick={() => {
-              if (!isCommitted && !isCurrent && !disabled) onSelect(p.idx);
-            }}
           >
             <div className="flex items-center justify-between px-5 py-2.5 border-b border-stone-100">
               <div className="flex items-center gap-2">
@@ -72,16 +63,11 @@ export default function BodyParagraphList({
                     isCommitted ? 'text-emerald-700' : 'text-amber-700'
                   }`}
                 >
-                  본론 {p.idx + 1}문단
+                  📝 {p.idx + 1}문단
                 </span>
                 {isCommitted && (
                   <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-800 font-bold">
                     ✓ 확정됨
-                  </span>
-                )}
-                {isCurrent && !isCommitted && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-amber-200 text-amber-800 font-bold">
-                    지금 쓰는 중
                   </span>
                 )}
               </div>
@@ -93,7 +79,7 @@ export default function BodyParagraphList({
                     disabled={disabled}
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (window.confirm(`본론 ${p.idx + 1}문단을 삭제할까?`)) {
+                      if (window.confirm(`${p.idx + 1}번째 문단을 삭제할까?`)) {
                         onRemove(p.idx);
                       }
                     }}
@@ -112,13 +98,10 @@ export default function BodyParagraphList({
               value={p.content}
               disabled={isCommitted || disabled}
               onChange={(e) => onChange(p.idx, e.target.value)}
-              onFocus={() => {
-                if (!isCommitted && !isCurrent) onSelect(p.idx);
-              }}
               placeholder={
                 isCommitted
                   ? '확정됨 (수정하려면 회귀하기)'
-                  : `본론 ${p.idx + 1}문단을 써 봐. 소주제문 + 다각적 논증.`
+                  : `${p.idx + 1}번째 문단을 써 봐. 소주제문 + 다각적 논증.`
               }
               spellCheck={false}
               autoCorrect="off"

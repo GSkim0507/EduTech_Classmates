@@ -39,46 +39,87 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid phase' }, { status: 400 });
   }
 
-  const paragraphIdx = Number(body.paragraphIdx ?? 0);
-  if (!Number.isInteger(paragraphIdx) || paragraphIdx < 0 || paragraphIdx > 4) {
-    return NextResponse.json({ error: 'Invalid paragraphIdx (0~4)' }, { status: 400 });
-  }
+  // body 페이즈에서 paragraphIdx 없으면 → 모든 paragraph 한 번에 commit
+  const isBodyAllCommit =
+    phase === 'body' && (body.paragraphIdx === null || body.paragraphIdx === undefined);
 
-  const latest = await getLatestDraftParagraph(
-    id,
-    phase as Exclude<Phase, 'done'>,
-    paragraphIdx
-  );
-  if (!latest || !latest.content.trim()) {
-    return NextResponse.json(
-      { error: '확정할 글이 비어있어요. 먼저 작성해 주세요.' },
-      { status: 400 }
-    );
-  }
+  let lastCommittedDraftId = 0;
+  let paragraphIdx = Number(body.paragraphIdx ?? 0);
 
-  // 1. 'committed' source의 새 draft revision 생성 (timeline 명시)
-  const committedResult = await db.execute({
-    sql: `INSERT INTO draft_revisions
-            (session_id, phase, paragraph_idx, content, content_hash, source, preceding_turn_id, timestamp)
-          VALUES (?, ?, ?, ?, ?, 'committed', NULL, ?)`,
-    args: [
+  if (isBodyAllCommit) {
+    // 본론 모든 paragraph 0..4 중 작성된 것 모두 commit
+    const totalBody = body.bodyParagraphCount ?? 3;
+    let anyCommitted = false;
+    for (let i = 0; i < totalBody; i++) {
+      const latest = await getLatestDraftParagraph(id, phase as Exclude<Phase, 'done'>, i);
+      if (!latest?.content?.trim()) {
+        return NextResponse.json(
+          { error: `${i + 1}번째 문단이 비어있어요. 모든 문단을 채워주세요.` },
+          { status: 400 }
+        );
+      }
+      const committedResult = await db.execute({
+        sql: `INSERT INTO draft_revisions
+                (session_id, phase, paragraph_idx, content, content_hash, source, preceding_turn_id, timestamp)
+              VALUES (?, ?, ?, ?, ?, 'committed', NULL, ?)`,
+        args: [id, phase, i, latest.content, hashContent(latest.content), now()],
+      });
+      const cid = Number(committedResult.lastInsertRowid);
+      await db.execute({
+        sql: `INSERT OR REPLACE INTO phase_paragraph_commits
+                (session_id, phase, paragraph_idx, committed_draft_id, committed_at)
+              VALUES (?, ?, ?, ?, ?)`,
+        args: [id, phase, i, cid, now()],
+      });
+      lastCommittedDraftId = cid;
+      paragraphIdx = i;
+      anyCommitted = true;
+    }
+    if (!anyCommitted) {
+      return NextResponse.json(
+        { error: '확정할 글이 없습니다.' },
+        { status: 400 }
+      );
+    }
+  } else {
+    if (!Number.isInteger(paragraphIdx) || paragraphIdx < 0 || paragraphIdx > 4) {
+      return NextResponse.json({ error: 'Invalid paragraphIdx (0~4)' }, { status: 400 });
+    }
+
+    const latest = await getLatestDraftParagraph(
       id,
-      phase,
-      paragraphIdx,
-      latest.content,
-      hashContent(latest.content),
-      now(),
-    ],
-  });
-  const committedDraftId = Number(committedResult.lastInsertRowid);
+      phase as Exclude<Phase, 'done'>,
+      paragraphIdx
+    );
+    if (!latest || !latest.content.trim()) {
+      return NextResponse.json(
+        { error: '확정할 글이 비어있어요. 먼저 작성해 주세요.' },
+        { status: 400 }
+      );
+    }
 
-  // 2. phase_paragraph_commits 마킹 (재commit 시 REPLACE)
-  await db.execute({
-    sql: `INSERT OR REPLACE INTO phase_paragraph_commits
-            (session_id, phase, paragraph_idx, committed_draft_id, committed_at)
-          VALUES (?, ?, ?, ?, ?)`,
-    args: [id, phase, paragraphIdx, committedDraftId, now()],
-  });
+    const committedResult = await db.execute({
+      sql: `INSERT INTO draft_revisions
+              (session_id, phase, paragraph_idx, content, content_hash, source, preceding_turn_id, timestamp)
+            VALUES (?, ?, ?, ?, ?, 'committed', NULL, ?)`,
+      args: [
+        id,
+        phase,
+        paragraphIdx,
+        latest.content,
+        hashContent(latest.content),
+        now(),
+      ],
+    });
+    lastCommittedDraftId = Number(committedResult.lastInsertRowid);
+
+    await db.execute({
+      sql: `INSERT OR REPLACE INTO phase_paragraph_commits
+              (session_id, phase, paragraph_idx, committed_draft_id, committed_at)
+            VALUES (?, ?, ?, ?, ?)`,
+      args: [id, phase, paragraphIdx, lastCommittedDraftId, now()],
+    });
+  }
 
   // 3. 다음 phase/paragraph 결정
   let nextPhase: Phase = phase;
@@ -88,13 +129,19 @@ export async function POST(
     nextPhase = 'body';
     nextParagraphIdx = 0;
   } else if (phase === 'body') {
-    const totalBody = body.bodyParagraphCount ?? 3;
-    if (paragraphIdx < totalBody - 1) {
-      nextPhase = 'body';
-      nextParagraphIdx = paragraphIdx + 1;
-    } else {
+    if (isBodyAllCommit) {
+      // 본론 전체 commit → 결론으로
       nextPhase = 'conclusion';
       nextParagraphIdx = 0;
+    } else {
+      const totalBody = body.bodyParagraphCount ?? 3;
+      if (paragraphIdx < totalBody - 1) {
+        nextPhase = 'body';
+        nextParagraphIdx = paragraphIdx + 1;
+      } else {
+        nextPhase = 'conclusion';
+        nextParagraphIdx = 0;
+      }
     }
   } else if (phase === 'conclusion') {
     nextPhase = 'title';
@@ -106,9 +153,11 @@ export async function POST(
 
   // 4. session.current_phase 갱신 (+ title commit이면 sessions.title도 갱신)
   if (phase === 'title') {
+    // title commit: sessions.title도 함께 update (latestContent 사용)
+    const titleLatest = await getLatestDraftParagraph(id, 'title', 0);
     await db.execute({
       sql: 'UPDATE sessions SET current_phase = ?, title = ?, last_updated = ? WHERE id = ?',
-      args: [nextPhase, latest.content, now(), id],
+      args: [nextPhase, titleLatest?.content ?? null, now(), id],
     });
   } else {
     await db.execute({
@@ -120,7 +169,7 @@ export async function POST(
   await touchSession(id);
 
   return NextResponse.json({
-    committedDraftId,
+    committedDraftId: lastCommittedDraftId,
     nextPhase,
     nextParagraphIdx,
   });
