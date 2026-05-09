@@ -224,12 +224,24 @@ export async function POST(
     signals.response_complexity = computeResponseComplexity(evalDraftText);
     signals.lexical_diversity = computeLexicalDiversity(evalDraftText);
 
+    // 본론에서 학생이 지금까지 채운 paragraph 수 (정석 3문단 미만 페널티 신호)
+    let bodyCommittedCount: number | undefined;
+    if (phase === 'body') {
+      let count = 0;
+      for (let i = 0; i < 5; i++) {
+        const d = await getLatestDraftParagraph(id, 'body', i);
+        if (d?.content?.trim()) count += 1;
+      }
+      bodyCommittedCount = count;
+    }
+
     // calibrate
     const calib = calibrate({
       phase,
       paragraphIdx: phase === 'body' && !isBodyAllMode ? paragraphIdx : undefined,
       signals,
       curriculumSignals,
+      bodyCommittedCount,
     });
     nextTone = calib.nextTone;
     nextDomain = calib.nextDomain;
@@ -271,22 +283,26 @@ export async function POST(
   }
 
   // ─── revision 메타데이터 계산 ───
-  // 같은 phase + paragraph_idx에서 student turn (submit/help)이 몇 번째인지
+  // 같은 phase + paragraph_idx에서 학생이 **이전에** 평가/도움을 요청한 횟수.
+  // 주의: 위에서 이미 현재 student turn을 INSERT 했으므로 allTurns에 그 row가 포함된다.
+  //       revision 카운트와 previousVersion 산정에서는 반드시 그 row를 제외한다.
+  //       (제외 안 하면 첫 제출인데도 "2번째 / 이전 버전" 모드로 잘못 진입)
   const allTurns = await getAllTurns(id);
-  const sameContextStudentTurns = allTurns.filter((t) => {
-    if (t.role !== 'student') return false;
+  const sameContextAllTurns = allTurns.filter((t) => {
     if (t.phase !== phase) return false;
     if (phase === 'body') {
-      // body 전체 모드(null)와 단일 모드(idx) 구분
       const targetIdx = isBodyAllMode ? null : paragraphIdx;
       return t.paragraph_idx === targetIdx;
     }
     return true;
   });
-  const revisionIdx = sameContextStudentTurns.length; // 이번 turn 포함 안 한 직전까지 카운트
+  const priorStudentTurns = sameContextAllTurns.filter(
+    (t) => t.role === 'student' && t.id !== studentTurnId
+  );
+  const revisionIdx = priorStudentTurns.length;
   const previousVersion =
     revisionIdx > 0
-      ? sameContextStudentTurns[sameContextStudentTurns.length - 1].content
+      ? priorStudentTurns[priorStudentTurns.length - 1].content
       : null;
 
   // ─── 시스템 프롬프트 빌드 + LLM 호출 ───
@@ -304,27 +320,19 @@ export async function POST(
     readyForNext,
   });
 
-  // history 정리: 같은 phase·paragraph 내 마지막 student-assistant pair만 + 다른 phase는 요약 생략
-  // → LLM이 "또 같은 거 봤다" 인지하지 않도록 history를 단순화
-  const recentSameContext = sameContextStudentTurns.slice(-1); // 직전 student turn 하나만
-  const recentSameContextIds = new Set(recentSameContext.map((t) => t.id));
+  // history 정리: 같은 phase·paragraph 컨텍스트 내에서
+  // (직전 student turn 1개 + 직전 assistant turn 1개) + **현재 student turn**만 보낸다.
+  // 첫 제출이면 history는 현재 student turn 하나뿐. → LLM이 "또 같은 거 봤네" 환각 안 함.
+  const lastPriorStudent = priorStudentTurns[priorStudentTurns.length - 1];
+  const priorAssistants = sameContextAllTurns.filter((t) => t.role === 'assistant');
+  const lastPriorAssistant = priorAssistants[priorAssistants.length - 1];
 
-  // 직전 student turn 다음에 오는 assistant turn (같은 idx 또는 그 직후)
-  const recentAssistantIds = new Set<number>();
-  for (const t of allTurns) {
-    if (t.role !== 'assistant') continue;
-    // 같은 phase·paragraph_idx 매칭
-    if (t.phase !== phase) continue;
-    if (phase === 'body') {
-      const targetIdx = isBodyAllMode ? null : paragraphIdx;
-      if (t.paragraph_idx !== targetIdx) continue;
-    }
-    recentAssistantIds.add(t.id);
-  }
+  const includeIds = new Set<number>([studentTurnId]);
+  if (lastPriorStudent) includeIds.add(lastPriorStudent.id);
+  if (lastPriorAssistant) includeIds.add(lastPriorAssistant.id);
 
-  const messages: ChatMessage[] = allTurns
-    .filter((t) => recentSameContextIds.has(t.id) || recentAssistantIds.has(t.id))
-    .slice(-6) // 안전: 최대 최근 6개 turn
+  const messages: ChatMessage[] = sameContextAllTurns
+    .filter((t) => includeIds.has(t.id))
     .map((t) => ({
       role: t.role === 'student' ? ('user' as const) : ('assistant' as const),
       content: t.content,

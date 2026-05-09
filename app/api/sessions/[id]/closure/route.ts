@@ -74,42 +74,63 @@ export async function POST(
     rebuttalsAndResponses,
   });
 
-  let raw: string;
-  try {
-    raw = await callClaude({
-      apiKey,
+  // 최대 2회 시도 — 첫 실패 시 더 엄격한 지시로 retry
+  async function callOnce(reinforce: boolean): Promise<string> {
+    const userMsg = reinforce
+      ? '직전 응답이 형식을 어겼어. 반드시 ```json 코드 블록 안에 명세된 모든 필드를 채운 JSON 하나만 답해. 코드 블록 밖에는 어떤 글자도 쓰지 마.'
+      : '위 글에 대한 너의 closure를 위 형식대로 JSON으로 답해 줘.';
+    return await callClaude({
+      apiKey: apiKey!,
       systemPrompt: prompt,
-      messages: [
-        {
-          role: 'user',
-          content: '위 글에 대한 너의 closure를 위 형식대로 JSON으로 답해 줘.',
-        },
-      ],
-      temperature: 0.4,
-      maxTokens: 800,
+      messages: [{ role: 'user', content: userMsg }],
+      temperature: reinforce ? 0.2 : 0.4,
+      // 3축 평가 + persuasion_hook + reasoning + agent_message → 800은 부족할 수 있음
+      maxTokens: 1500,
     });
-  } catch (err) {
-    return NextResponse.json(
-      {
-        error: 'Claude API 호출 실패',
-        detail: err instanceof Error ? err.message : String(err),
-      },
-      { status: 502 }
-    );
   }
 
-  let parsed;
-  try {
-    parsed = parseClosureResponse(raw);
-  } catch (err) {
-    return NextResponse.json(
-      {
-        error: 'Closure 응답 파싱 실패',
-        detail: err instanceof Error ? err.message : String(err),
-        raw,
+  let raw = '';
+  let parsed: ReturnType<typeof parseClosureResponse> | null = null;
+  let lastParseError: string | null = null;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      raw = await callOnce(attempt > 0);
+    } catch (err) {
+      // API 호출 자체 실패는 재시도해도 같은 결과 — 즉시 502
+      return NextResponse.json(
+        {
+          error: 'Claude API 호출 실패',
+          detail: err instanceof Error ? err.message : String(err),
+        },
+        { status: 502 }
+      );
+    }
+    try {
+      parsed = parseClosureResponse(raw);
+      break;
+    } catch (err) {
+      lastParseError = err instanceof Error ? err.message : String(err);
+      // retry
+    }
+  }
+
+  // 두 번 다 실패 — fallback closure 생성 (학생을 막지 않기 위해)
+  if (!parsed) {
+    console.warn('[closure] 2회 retry 후에도 파싱 실패 — fallback 사용:', lastParseError);
+    parsed = {
+      closureType: 'partial',
+      persuasionPct: 60,
+      agentMessage:
+        '음... 솔직히 글 전체를 한 번 더 차근차근 읽어볼게. 일단 끝까지 쓴 건 인정! ' +
+        '결론적으로 나는 네 주장에 60%쯤 확신이 들어.',
+      rationale: {
+        persuasion_hook: '결론적으로 나는 네 주장에 60% 확신이 들었어.',
+        reasoning: '응답 형식 오류로 자동 fallback closure가 사용됐어요.',
+        passed: [],
+        failed: [],
       },
-      { status: 500 }
-    );
+    };
   }
 
   await db.execute({

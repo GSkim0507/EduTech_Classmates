@@ -61,7 +61,7 @@ export default function AdminDashboard() {
               The Annoying Friend — 연구자 전용
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Link
               href="/"
               className="text-xs px-3 py-1.5 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700"
@@ -76,6 +76,65 @@ export default function AdminDashboard() {
             </button>
           </div>
         </header>
+
+        {/* CSV 일괄 export */}
+        <section className="bg-white rounded-lg shadow-sm border border-slate-200 mb-4 p-4">
+          <h2 className="text-sm font-semibold text-slate-700 mb-1">📥 CSV 일괄 다운로드</h2>
+          <p className="text-xs text-slate-500 mb-3">
+            DB 전체를 분석용 CSV로 받습니다. 한글 깨짐 방지를 위해 UTF-8 BOM이 포함됩니다 (Excel 호환).
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <a
+              href="/api/admin/export-csv?table=all"
+              download
+              className="text-xs px-3 py-2 rounded bg-slate-800 text-white hover:bg-slate-700 font-medium"
+            >
+              📊 세션 요약 (all)
+            </a>
+            <a
+              href="/api/admin/export-csv?table=sessions"
+              download
+              className="text-xs px-3 py-2 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700"
+            >
+              sessions
+            </a>
+            <a
+              href="/api/admin/export-csv?table=drafts"
+              download
+              className="text-xs px-3 py-2 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700"
+            >
+              drafts
+            </a>
+            <a
+              href="/api/admin/export-csv?table=turns"
+              download
+              className="text-xs px-3 py-2 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700"
+            >
+              turns
+            </a>
+            <a
+              href="/api/admin/export-csv?table=calibrations"
+              download
+              className="text-xs px-3 py-2 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700"
+            >
+              calibrations
+            </a>
+            <a
+              href="/api/admin/export-csv?table=closures"
+              download
+              className="text-xs px-3 py-2 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700"
+            >
+              closures
+            </a>
+            <a
+              href="/api/admin/export-csv?table=phase_commits"
+              download
+              className="text-xs px-3 py-2 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700"
+            >
+              phase_commits
+            </a>
+          </div>
+        </section>
 
         <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">

@@ -8,6 +8,8 @@ import type {
   TurnRow,
   ClosureRow,
   ClosureType,
+  ClosureRationale,
+  ClosureAxisAssessment,
   PhaseParagraphCommitRow,
 } from '@/lib/types';
 import FriendFace from '@/components/FriendFace';
@@ -136,13 +138,14 @@ export default function ResultPage({
   }
 
   const closureMeta = closure ? CLOSURE_LABEL[closure.closure_type] : null;
-  const rationale = closure
-    ? (JSON.parse(closure.rationale_json) as {
-        passed?: string[];
-        failed?: string[];
-        reasoning?: string;
-      })
+  const rationale: ClosureRationale | null = closure
+    ? (JSON.parse(closure.rationale_json) as ClosureRationale)
     : null;
+  const persuasionHook =
+    rationale?.persuasion_hook ??
+    (closure
+      ? `결론적으로 나는 네 주장에 ${closure.persuasion_pct ?? '?'}% 확신이 들었어.`
+      : '');
 
   return (
     <main className="flex-1 px-4 py-8 bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50">
@@ -156,72 +159,116 @@ export default function ResultPage({
         </header>
 
         {closure && closureMeta && (
-          <section
-            className="rounded-3xl border-4 p-6 mb-6 pop-in"
-            style={{
-              backgroundColor: closureMeta.bg,
-              borderColor: closureMeta.border,
-            }}
-          >
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0">
-                <FriendFace mood={closureMeta.mood} size={88} />
+          <>
+            {/* 🎯 최상단 Persuasion 훅 — 학생이 바로 보는 핵심 한 줄 */}
+            <section className="rounded-3xl border-4 border-amber-300 bg-gradient-to-br from-amber-100 via-orange-100 to-rose-100 p-6 mb-4 pop-in shadow-lg">
+              <div className="text-xs font-bold text-amber-700 uppercase tracking-wide mb-2 text-center">
+                🎯 친구의 최종 한 마디
               </div>
-              <div className="flex-1">
-                <div
-                  className="font-display text-2xl mb-1"
-                  style={{ color: closureMeta.text }}
-                >
-                  {closureMeta.emoji} {closureMeta.ko}
+              <p className="font-display text-2xl sm:text-3xl text-stone-800 leading-relaxed text-center">
+                {persuasionHook}
+              </p>
+              {typeof closure.persuasion_pct === 'number' && (
+                <div className="mt-4 max-w-md mx-auto">
+                  <div className="h-4 w-full rounded-full bg-white/70 overflow-hidden border border-amber-200">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${closure.persuasion_pct}%`,
+                        backgroundColor: closureMeta.text,
+                      }}
+                    />
+                  </div>
+                  <div
+                    className="text-center text-sm font-bold mt-1"
+                    style={{ color: closureMeta.text }}
+                  >
+                    설득력 {closure.persuasion_pct}%
+                  </div>
                 </div>
-                <div
-                  className="text-xs font-bold mb-3"
-                  style={{ color: closureMeta.text }}
-                >
-                  설득력: {closure.persuasion_pct ?? '?'}%
-                </div>
-                <p className="text-base leading-relaxed text-stone-800 whitespace-pre-wrap">
-                  {closure.agent_message}
-                </p>
+              )}
+            </section>
 
-                {typeof closure.persuasion_pct === 'number' && (
-                  <div className="mt-4">
-                    <div className="h-3 w-full rounded-full bg-white/60 overflow-hidden border border-stone-200">
-                      <div
-                        className="h-full rounded-full transition-all"
-                        style={{
-                          width: `${closure.persuasion_pct}%`,
-                          backgroundColor: closureMeta.text,
-                        }}
-                      />
+            {/* Closure 본문 카드 */}
+            <section
+              className="rounded-3xl border-4 p-6 mb-6 fade-in"
+              style={{
+                backgroundColor: closureMeta.bg,
+                borderColor: closureMeta.border,
+              }}
+            >
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0">
+                  <FriendFace mood={closureMeta.mood} size={88} />
+                </div>
+                <div className="flex-1">
+                  <div
+                    className="font-display text-2xl mb-1"
+                    style={{ color: closureMeta.text }}
+                  >
+                    {closureMeta.emoji} {closureMeta.ko}
+                  </div>
+                  <p className="text-base leading-relaxed text-stone-800 whitespace-pre-wrap">
+                    {closure.agent_message}
+                  </p>
+                  {rationale?.reasoning && (
+                    <div className="italic mt-3 text-xs text-stone-500">
+                      {rationale.reasoning}
                     </div>
-                  </div>
-                )}
-
-                {rationale && (
-                  <div className="mt-4 text-xs text-stone-600 space-y-1.5">
-                    {rationale.passed && rationale.passed.length > 0 && (
-                      <div>
-                        <span className="font-bold">✓ 잘한 부분: </span>
-                        {rationale.passed.join(', ')}
-                      </div>
-                    )}
-                    {rationale.failed && rationale.failed.length > 0 && (
-                      <div>
-                        <span className="font-bold">✗ 보강하면 좋을 부분: </span>
-                        {rationale.failed.join(', ')}
-                      </div>
-                    )}
-                    {rationale.reasoning && (
-                      <div className="italic mt-2 text-stone-500">
-                        {rationale.reasoning}
-                      </div>
-                    )}
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
-          </section>
+            </section>
+
+            {/* 3축 평가 카드 */}
+            {(rationale?.structure_assessment ||
+              rationale?.content_assessment ||
+              rationale?.feedback_acceptance) && (
+              <section className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6 fade-in">
+                <AxisCard
+                  emoji="🏛️"
+                  label="글 구조"
+                  axis={rationale?.structure_assessment}
+                  accent="border-sky-200 bg-sky-50"
+                />
+                <AxisCard
+                  emoji="💡"
+                  label="아이디어·내용"
+                  axis={rationale?.content_assessment}
+                  accent="border-emerald-200 bg-emerald-50"
+                />
+                <AxisCard
+                  emoji="👂"
+                  label="친구 피드백 수용"
+                  axis={rationale?.feedback_acceptance}
+                  accent="border-amber-200 bg-amber-50"
+                />
+              </section>
+            )}
+
+            {/* 호환: 예전 포맷 (3축 없는 경우) */}
+            {!rationale?.structure_assessment &&
+              !rationale?.content_assessment &&
+              !rationale?.feedback_acceptance &&
+              rationale &&
+              ((rationale.passed && rationale.passed.length > 0) ||
+                (rationale.failed && rationale.failed.length > 0)) && (
+                <section className="rounded-2xl border-2 border-stone-200 bg-white px-5 py-4 mb-6 fade-in text-sm text-stone-700 space-y-1.5">
+                  {rationale.passed && rationale.passed.length > 0 && (
+                    <div>
+                      <span className="font-bold">✓ 잘한 부분: </span>
+                      {rationale.passed.join(', ')}
+                    </div>
+                  )}
+                  {rationale.failed && rationale.failed.length > 0 && (
+                    <div>
+                      <span className="font-bold">✗ 보강하면 좋을 부분: </span>
+                      {rationale.failed.join(', ')}
+                    </div>
+                  )}
+                </section>
+              )}
+          </>
         )}
 
         <section className="bg-white rounded-3xl border-2 border-amber-100 shadow-sm p-6 mb-6 fade-in">
@@ -263,6 +310,18 @@ export default function ResultPage({
           </article>
         </section>
 
+        {/* 하단 Persuasion 훅 — 학생이 글을 다 읽고 마지막에 다시 본다 */}
+        {closure && closureMeta && (
+          <section className="rounded-3xl border-4 border-amber-300 bg-gradient-to-br from-rose-100 via-orange-100 to-amber-100 p-6 mb-6 pop-in shadow-lg">
+            <div className="text-xs font-bold text-amber-700 uppercase tracking-wide mb-2 text-center">
+              🤝 다시 한 번 — 친구의 잔여 동의도
+            </div>
+            <p className="font-display text-xl sm:text-2xl text-stone-800 leading-relaxed text-center">
+              {persuasionHook}
+            </p>
+          </section>
+        )}
+
         <section className="bg-white rounded-3xl border-2 border-sky-100 shadow-sm p-6 mb-6 fade-in">
           <h2 className="font-display text-2xl text-stone-800 mb-2">📥 데이터 내보내기</h2>
           <p className="text-sm text-stone-600 mb-4 leading-relaxed">
@@ -298,6 +357,58 @@ function DraftBlock({ label, content }: { label: string; content: string }) {
       <p className="text-base whitespace-pre-wrap leading-loose">
         {content || <span className="text-stone-400 italic">(작성 안 됨)</span>}
       </p>
+    </div>
+  );
+}
+
+function AxisCard({
+  emoji,
+  label,
+  axis,
+  accent,
+}: {
+  emoji: string;
+  label: string;
+  axis?: ClosureAxisAssessment;
+  accent: string;
+}) {
+  if (!axis) {
+    return (
+      <div className={`rounded-2xl border-2 ${accent} px-4 py-4 text-center text-sm text-stone-400`}>
+        <div className="text-xl mb-1">{emoji}</div>
+        <div className="font-bold text-stone-600 mb-1">{label}</div>
+        <div className="italic">평가 정보 없음</div>
+      </div>
+    );
+  }
+  return (
+    <div className={`rounded-2xl border-2 ${accent} px-4 py-4 flex flex-col gap-2`}>
+      <div className="flex items-baseline gap-2">
+        <span className="text-2xl">{emoji}</span>
+        <span className="font-display text-lg text-stone-800">{label}</span>
+        <span className="ml-auto text-sm font-bold text-stone-600 tabular-nums">
+          {axis.score}
+        </span>
+      </div>
+      <div className="h-2 w-full rounded-full bg-white/70 overflow-hidden border border-stone-200">
+        <div
+          className="h-full bg-stone-700 transition-all"
+          style={{ width: `${Math.max(0, Math.min(100, axis.score))}%` }}
+        />
+      </div>
+      <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">
+        {axis.comment}
+      </p>
+      {axis.passed && axis.passed.length > 0 && (
+        <div className="text-xs text-emerald-700">
+          ✓ {axis.passed.join(', ')}
+        </div>
+      )}
+      {axis.failed && axis.failed.length > 0 && (
+        <div className="text-xs text-rose-700">
+          ✗ {axis.failed.join(', ')}
+        </div>
+      )}
     </div>
   );
 }

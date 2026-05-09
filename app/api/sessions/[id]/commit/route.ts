@@ -47,17 +47,13 @@ export async function POST(
   let paragraphIdx = Number(body.paragraphIdx ?? 0);
 
   if (isBodyAllCommit) {
-    // 본론 모든 paragraph 0..4 중 작성된 것 모두 commit
+    // 본론: 최소 1문단 commit 가능. 빈 문단은 건너뛴다.
+    // 정석 3문단 미만이면 committedCount로 페널티(다른 모듈에서 적용).
     const totalBody = body.bodyParagraphCount ?? 3;
-    let anyCommitted = false;
+    let committedCount = 0;
     for (let i = 0; i < totalBody; i++) {
       const latest = await getLatestDraftParagraph(id, phase as Exclude<Phase, 'done'>, i);
-      if (!latest?.content?.trim()) {
-        return NextResponse.json(
-          { error: `${i + 1}번째 문단이 비어있어요. 모든 문단을 채워주세요.` },
-          { status: 400 }
-        );
-      }
+      if (!latest?.content?.trim()) continue; // 빈 문단 skip
       const committedResult = await db.execute({
         sql: `INSERT INTO draft_revisions
                 (session_id, phase, paragraph_idx, content, content_hash, source, preceding_turn_id, timestamp)
@@ -73,11 +69,11 @@ export async function POST(
       });
       lastCommittedDraftId = cid;
       paragraphIdx = i;
-      anyCommitted = true;
+      committedCount += 1;
     }
-    if (!anyCommitted) {
+    if (committedCount === 0) {
       return NextResponse.json(
-        { error: '확정할 글이 없습니다.' },
+        { error: '본론을 적어도 한 문단은 써야 결론으로 갈 수 있어.' },
         { status: 400 }
       );
     }

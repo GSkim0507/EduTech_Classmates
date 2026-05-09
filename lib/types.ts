@@ -165,9 +165,31 @@ export interface PrecedingContent {
 }
 
 // Closure 근거
+// v3: 3축 평가 (글 구조 / 아이디어·내용 / AI 피드백 수용도) + persuasion 훅 분리
+export interface ClosureAxisAssessment {
+  /** 0~100 — 이 축의 점수 */
+  score: number;
+  /** 학생에게 보여줄 친구 어투 짧은 코멘트 (1~2문장) */
+  comment: string;
+  /** 잘한 점 (있으면) */
+  passed?: string[];
+  /** 보강하면 좋을 점 (있으면) */
+  failed?: string[];
+}
+
 export interface ClosureRationale {
-  passed: string[];
-  failed: string[];
+  /** v3: 글 구조 (서론 명제·본론 논증·결론 정리·제목) */
+  structure_assessment?: ClosureAxisAssessment;
+  /** v3: 아이디어·내용 (주장 깊이, 근거 적절성, 표현) */
+  content_assessment?: ClosureAxisAssessment;
+  /** v3: AI 피드백 수용도 (반박/도움 이후 글이 어떻게 변했는지) */
+  feedback_acceptance?: ClosureAxisAssessment;
+  /** v3: 학생 글에 대한 친구의 잔여 동의도 — "결론적으로 나는 네 주장에 N% 확신이 들었어" 훅 */
+  persuasion_hook?: string;
+
+  // 기존 호환 필드 (예전 closure row 표시용)
+  passed?: string[];
+  failed?: string[];
   rebuttal_responses?: {
     rebuttal_turn_id?: number;
     successfully_addressed: boolean;

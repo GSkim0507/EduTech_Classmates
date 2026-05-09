@@ -27,6 +27,8 @@ export interface CalibrationInput {
   paragraphIdx?: number | null;
   signals: Signals;
   curriculumSignals: CurriculumSignals | null;
+  /** 본론 페이즈에서, 학생이 정석 3문단 미만으로 진행 중이면 composite에 페널티 적용 */
+  bodyCommittedCount?: number;
 }
 
 export interface CalibrationOutput {
@@ -121,7 +123,7 @@ function analyzeCurriculum(cur: CurriculumSignals | null): {
 }
 
 export function calibrate(input: CalibrationInput): CalibrationOutput {
-  const { signals, curriculumSignals } = input;
+  const { signals, curriculumSignals, phase, bodyCommittedCount } = input;
 
   // 1. 5 평가요소 평균
   const evalScores = FIVE_DIMENSIONS.map((d) => signals[d.id])
@@ -150,8 +152,15 @@ export function calibrate(input: CalibrationInput): CalibrationOutput {
   const revisionCount = signals.self_revision_count ?? 0;
 
   // 5. 종합 점수 (0~1, 학생 잘함 정도) — 평가요소 평균 70% + 헌법 30%
-  const composite =
-    avgEval * 0.7 + (1 - curriculumViolationRatio) * 0.3;
+  let composite = avgEval * 0.7 + (1 - curriculumViolationRatio) * 0.3;
+
+  // 본론 정석 3문단 미만 페널티 — 1문단=×0.85, 2문단=×0.92, 3문단 이상=1.0
+  let bodyParaPenalty = 1.0;
+  if (phase === 'body' && typeof bodyCommittedCount === 'number') {
+    if (bodyCommittedCount === 1) bodyParaPenalty = 0.85;
+    else if (bodyCommittedCount === 2) bodyParaPenalty = 0.92;
+  }
+  composite *= bodyParaPenalty;
 
   // 6. tone 결정 — 게임 페르소나
   // 잘 쓰면 친구 약오름 (annoying), 못 쓰면 잘난 척 (less-annoying)
@@ -194,7 +203,7 @@ export function calibrate(input: CalibrationInput): CalibrationOutput {
   // 조건: composite ≥ 0.75 AND 헌법 위반 ≤ 1
   const readyForNext = composite >= 0.75 && cur.violationCount <= 1;
 
-  const reason = `composite=${composite.toFixed(2)} (avgEval=${avgEval.toFixed(2)}, curriculumViolations=${cur.violationCount}/${cur.totalChecks}), help=${helpCount}, revisions=${revisionCount}, weakest=${weakestLabel ?? 'n/a'} → ${nextTone}/${nextDomain}, readyForNext=${readyForNext}`;
+  const reason = `composite=${composite.toFixed(2)} (avgEval=${avgEval.toFixed(2)}, curriculumViolations=${cur.violationCount}/${cur.totalChecks}, bodyParaPenalty=${bodyParaPenalty.toFixed(2)}), help=${helpCount}, revisions=${revisionCount}, weakest=${weakestLabel ?? 'n/a'} → ${nextTone}/${nextDomain}, readyForNext=${readyForNext}`;
 
   return {
     nextTone,
@@ -228,3 +237,6 @@ export function computeLexicalDiversity(text: string): number {
 }
 
 export { dimensionLabel };
+
+// 누적 게이지 helper는 lib/gauge.ts로 분리 (client-safe).
+// 계산 로직 일치: bodyParaPenalty 기준 1=×0.85, 2=×0.92, 3+=×1.0

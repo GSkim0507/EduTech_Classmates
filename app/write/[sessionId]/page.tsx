@@ -13,6 +13,7 @@ import type {
   PhaseParagraphCommitRow,
 } from '@/lib/types';
 import FriendFace, { FriendFaceMini } from '@/components/FriendFace';
+import { computeAccumulatedGauge, scoreFromSignalsJson } from '@/lib/gauge';
 import { showToast } from '@/components/Toast';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import HelpDomainModal from '@/components/HelpDomainModal';
@@ -62,7 +63,9 @@ type ConfirmKind =
   | { kind: 'regress'; phase: Exclude<Phase, 'done'>; paragraphIdx: number }
   | null;
 
-const MIN_PARA = 3;
+// 본론은 최소 1문단(페널티), 정석 3문단(default), 최대 5문단
+const MIN_PARA = 1;
+const DEFAULT_PARA = 3;
 const MAX_PARA = 5;
 
 export default function WritePage({
@@ -118,6 +121,13 @@ export default function WritePage({
     null
   );
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // 자동저장 timer가 어떤 (phase, paragraphIdx)에 대한 저장인지 명시 보관 — 클로저 캡처 X
+  const pendingSaveRef = useRef<{
+    phase: Exclude<Phase, 'done'>;
+    paragraphIdx: number;
+    content: string;
+    source: 'student_write' | 'student_revise';
+  } | null>(null);
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -168,7 +178,8 @@ export default function WritePage({
         .map((s) => Number(s))
         .sort((a, b) => a - b);
       const maxIdx = indices.length > 0 ? Math.max(...indices) : -1;
-      const paragraphCount = Math.max(MIN_PARA, maxIdx + 1);
+      // 신규 진입은 정석 3문단 default, 이미 작성된 문단이 더 많으면 그만큼 표시
+      const paragraphCount = Math.max(DEFAULT_PARA, maxIdx + 1);
 
       const paras: BodyParagraph[] = [];
       for (let i = 0; i < paragraphCount; i++) {
@@ -229,26 +240,37 @@ export default function WritePage({
   }
 
   // ─── 자동 저장 ───
-  function scheduleAutosave(text: string) {
+  // 인자로 (phase, paragraphIdx, content)를 명시 받아 클로저 캡처 X — race condition 방지.
+  function scheduleAutosave(
+    text: string,
+    targetPhase?: Exclude<Phase, 'done'>,
+    targetParagraphIdx?: number
+  ) {
+    const tphase = targetPhase ?? phase;
+    const tidx = typeof targetParagraphIdx === 'number' ? targetParagraphIdx : currentParagraphIdx;
+    const source = hasFeedbackForCurrent ? 'student_revise' : 'student_write';
+
+    pendingSaveRef.current = { phase: tphase, paragraphIdx: tidx, content: text, source };
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
+      // pendingSaveRef는 가장 최신 입력을 가리키지만, 우리는 timer 시점의 (phase, idx, content)
+      // 페어를 사용한다 (= setTimeout 클로저로 캡처된 tphase/tidx/text — React state 아님).
       const last = lastSavedRef.current;
       if (
         last &&
-        last.phase === phase &&
-        last.paragraphIdx === currentParagraphIdx &&
+        last.phase === tphase &&
+        last.paragraphIdx === tidx &&
         last.content === text
       ) {
         return;
       }
-      const source = hasFeedbackForCurrent ? 'student_revise' : 'student_write';
       try {
         const res = await fetch(`/api/sessions/${sessionId}/draft`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            phase,
-            paragraphIdx: currentParagraphIdx,
+            phase: tphase,
+            paragraphIdx: tidx,
             content: text,
             source,
           }),
@@ -257,61 +279,90 @@ export default function WritePage({
         if (res.ok && !data.deduped) {
           showToast('저장됐어!', { emoji: '💾' });
         }
-        lastSavedRef.current = {
-          phase,
-          paragraphIdx: currentParagraphIdx,
-          content: text,
-        };
+        lastSavedRef.current = { phase: tphase, paragraphIdx: tidx, content: text };
       } catch (err) {
         console.warn('autosave failed', err);
       }
     }, 1100);
   }
 
-  async function flushAutosave(forceSource?: 'student_write' | 'student_revise') {
+  // 동기 액션 직전 호출 — 가장 최신 pending save가 있으면 그 페어로 즉시 저장.
+  async function flushAutosave(
+    forceSource?: 'student_write' | 'student_revise',
+    targetPhase?: Exclude<Phase, 'done'>,
+    targetParagraphIdx?: number
+  ) {
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
-    const text = getCurrentText();
-    if (lastSavedRef.current?.content === text) return;
+    const pending = pendingSaveRef.current;
+    // 명시 인자가 있으면 그 페어 우선, 아니면 pending (가장 최근 keystroke), 아니면 fallback.
+    const tphase = targetPhase ?? pending?.phase ?? phase;
+    const tidx =
+      typeof targetParagraphIdx === 'number'
+        ? targetParagraphIdx
+        : (pending?.paragraphIdx ?? currentParagraphIdx);
+    const text =
+      pending && pending.phase === tphase && pending.paragraphIdx === tidx
+        ? pending.content
+        : (() => {
+            // pending이 다른 컨텍스트면 현재 state에서 읽는다.
+            if (tphase === 'intro') return introText;
+            if (tphase === 'conclusion') return conclusionText;
+            if (tphase === 'title') return titleText;
+            return bodyParagraphs[tidx]?.content ?? '';
+          })();
+
+    const last = lastSavedRef.current;
+    if (
+      last &&
+      last.phase === tphase &&
+      last.paragraphIdx === tidx &&
+      last.content === text
+    ) {
+      pendingSaveRef.current = null;
+      return;
+    }
     const source =
-      forceSource ?? (hasFeedbackForCurrent ? 'student_revise' : 'student_write');
+      forceSource ?? pending?.source ?? (hasFeedbackForCurrent ? 'student_revise' : 'student_write');
     await fetch(`/api/sessions/${sessionId}/draft`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        phase,
-        paragraphIdx: currentParagraphIdx,
+        phase: tphase,
+        paragraphIdx: tidx,
         content: text,
         source,
       }),
     });
-    lastSavedRef.current = { phase, paragraphIdx: currentParagraphIdx, content: text };
+    lastSavedRef.current = { phase: tphase, paragraphIdx: tidx, content: text };
+    pendingSaveRef.current = null;
   }
 
   // ─── 텍스트 변경 핸들러 ───
   function handleIntroChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const v = e.target.value;
     setIntroText(v);
-    scheduleAutosave(v);
+    scheduleAutosave(v, 'intro', 0);
   }
   function handleConclusionChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const v = e.target.value;
     setConclusionText(v);
-    scheduleAutosave(v);
+    scheduleAutosave(v, 'conclusion', 0);
   }
   function handleTitleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const v = e.target.value;
     setTitleText(v);
-    scheduleAutosave(v);
+    scheduleAutosave(v, 'title', 0);
   }
   function handleBodyChange(idx: number, content: string) {
     setBodyParagraphs((prev) => prev.map((p) => (p.idx === idx ? { ...p, content } : p)));
-    // 입력한 paragraph로 currentBodyIdx 동적 변경 (autosave 대상)
+    // 입력한 paragraph로 currentBodyIdx 동적 변경 (다른 액션에서 사용)
     setCurrentBodyIdx(idx);
+    // race condition 방지: 다른 문단 저장 메타 무효화 후, 명시적으로 (body, idx) 저장 예약
     lastSavedRef.current = null;
-    scheduleAutosave(content);
+    scheduleAutosave(content, 'body', idx);
   }
   // body paragraph별 도움/설득하기 핸들러
   function handleParagraphHelp(idx: number) {
@@ -354,12 +405,15 @@ export default function WritePage({
   async function handleHelpDomain(domain: HelpDomain) {
     setHelpModalOpen(false);
     setError(null);
-    const text = getCurrentText();
+    const targetIdx =
+      phase === 'body' ? (typeof helpForBodyIdx === 'number' ? helpForBodyIdx : currentBodyIdx) : 0;
+    const text =
+      phase === 'body' ? bodyParagraphs[targetIdx]?.content ?? '' : getCurrentText();
     if (!text.trim()) {
       setError('일단 글을 조금 써 봐.');
       return;
     }
-    await flushAutosave();
+    await flushAutosave(undefined, phase, targetIdx);
     setPendingAction('help');
     try {
       const res = await fetch(`/api/sessions/${sessionId}/turn`, {
@@ -368,13 +422,8 @@ export default function WritePage({
         body: JSON.stringify({
           apiKey,
           trigger: 'help',
-          // body 페이즈는 학생이 클릭한 문단(helpForBodyIdx)에 대해 평가
-          paragraphIdx:
-            phase === 'body'
-              ? typeof helpForBodyIdx === 'number'
-                ? helpForBodyIdx
-                : null
-              : 0,
+          // body 페이즈는 학생이 클릭한 문단(targetIdx)에 대해 평가
+          paragraphIdx: phase === 'body' ? targetIdx : 0,
           helpDomain: domain,
         }),
       });
@@ -406,7 +455,8 @@ export default function WritePage({
       setCurrentBodyIdx(targetParagraphIdx); // autosave 정렬
       lastSavedRef.current = null;
     }
-    await flushAutosave();
+    const flushIdx = phase === 'body' && typeof targetParagraphIdx === 'number' ? targetParagraphIdx : 0;
+    await flushAutosave(undefined, phase, flushIdx);
     setPendingAction('submit');
     try {
       const res = await fetch(`/api/sessions/${sessionId}/turn`, {
@@ -445,7 +495,8 @@ export default function WritePage({
     }
     setPendingAction('commit');
     try {
-      await flushAutosave('student_revise');
+      // commit 직전 flush — body면 현재 문단 idx, 그 외는 0.
+      await flushAutosave('student_revise', phase, phase === 'body' ? currentBodyIdx : 0);
       const res = await fetch(`/api/sessions/${sessionId}/commit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -582,6 +633,38 @@ export default function WritePage({
 
   const lastCalib = state.calibrations[state.calibrations.length - 1];
   const currentMood: Tone = (lastCalib?.next_tone as Tone) ?? 'less-annoying';
+
+  // 누적 가중 평균 게이지 — phase별 (paragraph_idx별) 최신 점수만 추려 가중 합산
+  const accumulatedGaugeScore = (() => {
+    const phases: Exclude<Phase, 'done'>[] = ['intro', 'body', 'conclusion', 'title'];
+    const inputs = phases.map((ph) => {
+      // 같은 phase + paragraph_idx 묶음에서 최신 calibration의 score만 사용
+      const byPara = new Map<number, { ts: string; score: number }>();
+      for (const c of state.calibrations) {
+        if (c.phase !== ph) continue;
+        const sc = scoreFromSignalsJson(c.signals_json);
+        if (sc === null) continue;
+        const idx = c.paragraph_idx ?? 0;
+        const prev = byPara.get(idx);
+        if (!prev || c.timestamp > prev.ts) {
+          byPara.set(idx, { ts: c.timestamp, score: sc });
+        }
+      }
+      const paragraphScores = Array.from(byPara.values()).map((v) => v.score);
+      const result: {
+        phase: Exclude<Phase, 'done'>;
+        paragraphScores: number[];
+        bodyCommittedCount?: number;
+      } = { phase: ph, paragraphScores };
+      if (ph === 'body') {
+        // 학생이 채운 본론 paragraph 수 (committed + 작성 중인 비어있지 않은 문단)
+        const filled = bodyParagraphs.filter((p) => p.content.trim().length > 0).length;
+        result.bodyCommittedCount = filled;
+      }
+      return result;
+    });
+    return computeAccumulatedGauge(inputs);
+  })();
 
   // readyForNext — 가장 최근 calibration이 같은 phase·paragraph에서 충분 점수 도달했는지
   // 클라이언트는 calibrations 테이블에 readyForNext가 따로 저장되지 않으므로
@@ -864,23 +947,7 @@ export default function WritePage({
                 </div>
               </div>
             </div>
-            <WinGauge
-              studentScore={
-                lastCalib
-                  ? Math.round(
-                      ((Object.values(JSON.parse(lastCalib.signals_json) as Record<string, unknown>)
-                        .filter((v): v is number => typeof v === 'number')
-                        .reduce((s, v) => s + v, 0) || 0) /
-                        Math.max(
-                          1,
-                          Object.values(JSON.parse(lastCalib.signals_json) as Record<string, unknown>)
-                            .filter((v): v is number => typeof v === 'number').length
-                        )) *
-                        100
-                    )
-                  : null
-              }
-            />
+            <WinGauge studentScore={accumulatedGaugeScore} />
             {readyForNextSignal && (
               <div className="mt-3 rounded-2xl border-2 border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 font-bold pop-in flex items-center gap-2">
                 <span className="text-base">👉</span>

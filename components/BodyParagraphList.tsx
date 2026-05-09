@@ -24,7 +24,8 @@ export interface BodyParagraphListProps {
   helpRemainingByIdx?: Record<number, number>;
 }
 
-const MIN_PARAGRAPHS = 3;
+// 본론 최소 1문단 (페널티 적용), 정석 3문단, 최대 5문단
+const MIN_PARAGRAPHS = 1;
 const MAX_PARAGRAPHS = 5;
 const HELP_PER_PARAGRAPH = 2;
 
@@ -180,6 +181,10 @@ export default function BodyParagraphList({
           본론은 최대 {MAX_PARAGRAPHS}문단까지 가능해.
         </div>
       )}
+      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-relaxed">
+        💡 <span className="font-bold">정석은 본론 3문단</span>이야. 1~2문단으로도
+        넘어갈 수 있지만 그러면 친구가 쪼끔 더 까칠해질 수 있어!
+      </p>
     </div>
   );
 }
