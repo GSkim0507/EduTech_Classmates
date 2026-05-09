@@ -583,6 +583,36 @@ export default function WritePage({
   const lastCalib = state.calibrations[state.calibrations.length - 1];
   const currentMood: Tone = (lastCalib?.next_tone as Tone) ?? 'less-annoying';
 
+  // readyForNext — 가장 최근 calibration이 같은 phase·paragraph에서 충분 점수 도달했는지
+  // 클라이언트는 calibrations 테이블에 readyForNext가 따로 저장되지 않으므로
+  // signals_json의 composite를 재계산하지 않고, lastCalib이 같은 (phase, paragraph_idx)인지 확인 + signals 평균
+  const readyForNextSignal = (() => {
+    if (!lastCalib) return false;
+    if (lastCalib.phase !== phase) return false;
+    if (phase === 'body') {
+      // body 단일 모드면 같은 paragraph_idx 매칭
+      if (lastCalib.paragraph_idx !== currentBodyIdx) return false;
+    }
+    try {
+      const sig = JSON.parse(lastCalib.signals_json) as Record<string, unknown>;
+      const evalKeys = [
+        'claim_clarity',
+        'evidence_appropriateness',
+        'evidence_relevance',
+        'expression_appropriateness',
+        'structural_coherence',
+      ];
+      const scores = evalKeys
+        .map((k) => sig[k])
+        .filter((v): v is number => typeof v === 'number');
+      if (scores.length === 0) return false;
+      const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+      return avg >= 0.75;
+    } catch {
+      return false;
+    }
+  })();
+
   // PrecedingContext용 commit된 글
   const drafts = state.drafts;
   const commits = state.phase_commits ?? [];
@@ -796,7 +826,9 @@ export default function WritePage({
                 })
               }
               disabled={pendingAction !== null}
-              className="px-5 py-3 rounded-2xl text-base font-bold bg-emerald-500 hover:bg-emerald-600 text-white shadow-md hover:scale-[1.03] disabled:opacity-50 disabled:hover:scale-100"
+              className={`px-5 py-3 rounded-2xl text-base font-bold bg-emerald-500 hover:bg-emerald-600 text-white shadow-md hover:scale-[1.03] disabled:opacity-50 disabled:hover:scale-100 ${
+                readyForNextSignal ? 'ready-pulse' : ''
+              }`}
             >
               {phase === 'title'
                 ? '✅ 글 마무리'
@@ -849,6 +881,12 @@ export default function WritePage({
                   : null
               }
             />
+            {readyForNextSignal && (
+              <div className="mt-3 rounded-2xl border-2 border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 font-bold pop-in flex items-center gap-2">
+                <span className="text-base">👉</span>
+                <span>친구가 인정했어! 이제 다음으로 가도 좋아!</span>
+              </div>
+            )}
           </div>
 
           {/* 대화 */}

@@ -36,6 +36,8 @@ export interface CalibrationOutput {
   reason: string;
   /** 0~100, 학생 점수 (승부 게이지용) */
   studentScore: number;
+  /** 학생 글이 충분히 됐다 싶을 때 true — 다음 단계 권유 시그널 */
+  readyForNext: boolean;
 }
 
 /**
@@ -188,7 +190,11 @@ export function calibrate(input: CalibrationInput): CalibrationOutput {
     nextDomain = 'idea';
   }
 
-  const reason = `composite=${composite.toFixed(2)} (avgEval=${avgEval.toFixed(2)}, curriculumViolations=${cur.violationCount}/${cur.totalChecks}), help=${helpCount}, revisions=${revisionCount}, weakest=${weakestLabel ?? 'n/a'} → ${nextTone}/${nextDomain}`;
+  // 9. readyForNext — 학생 글이 충분히 됐다 싶을 때 다음 단계 권유
+  // 조건: composite ≥ 0.75 AND 헌법 위반 ≤ 1
+  const readyForNext = composite >= 0.75 && cur.violationCount <= 1;
+
+  const reason = `composite=${composite.toFixed(2)} (avgEval=${avgEval.toFixed(2)}, curriculumViolations=${cur.violationCount}/${cur.totalChecks}), help=${helpCount}, revisions=${revisionCount}, weakest=${weakestLabel ?? 'n/a'} → ${nextTone}/${nextDomain}, readyForNext=${readyForNext}`;
 
   return {
     nextTone,
@@ -196,6 +202,7 @@ export function calibrate(input: CalibrationInput): CalibrationOutput {
     weakestViolationLabel: weakestLabel,
     reason,
     studentScore: Math.round(composite * 100),
+    readyForNext,
   };
 }
 

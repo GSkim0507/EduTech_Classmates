@@ -30,6 +30,8 @@ interface PersonaContext {
   revisionIdx?: number;
   /** 직전 같은 위치의 학생 글 (있을 경우 LLM이 변화점을 인식) */
   previousVersion?: string | null;
+  /** 학생 글이 충분히 됐을 때 친구가 다음으로 권유하도록 신호 */
+  readyForNext?: boolean;
 }
 
 const TONE_INSTRUCTION: Record<Tone, string> = {
@@ -121,6 +123,23 @@ export function buildSystemPrompt(ctx: PersonaContext): string {
     if (ctx.previousVersion && ctx.previousVersion.trim()) {
       revisionNote += `\n\n[직전 버전 — 비교용]\n${ctx.previousVersion}`;
     }
+    if (ctx.revisionIdx >= 3) {
+      revisionNote += `\n\n## ⚠️ Perfectionism Brake (반드시 적용)
+학생이 같은 부분을 **${ord}번째** 다듬고 있다. 너무 한 곳에만 머물면 글 전체를 끝내지 못한다.
+- 약점만 끝까지 짚지 말고, 잘된 부분을 **인정**하고 **다음 부분으로 가도록 권유**해라.
+- 게임 페르소나 톤 유지: "야, 이 정도면 충분해. 같은 거 자꾸 다듬는 거 시간 아까워. 다음 가서 보여줘." 같이.`;
+    }
+  }
+
+  // readyForNext — 학생 글이 충분히 됐다 싶을 때 친구가 다음으로 권유
+  let readyForNextNote = '';
+  if (ctx.readyForNext) {
+    readyForNextNote = `\n## ✅ 다음 단계 권유 (Scaffolding fading)
+학생 글이 이 정도면 **충분히 좋다**. 끝까지 약점만 짚지 말고, 잘된 부분을 인정하고 **다음 단계로 자연스럽게 권유**해라.
+- 게임 페르소나 톤(${ctx.tone === 'annoying' ? 'annoying' : 'less-annoying'}):
+  · annoying 모드: "쳇... 됐어. 인정. 그만 다듬고 다음 거 가서 또 도전해 볼래?"
+  · less-annoying 모드: "이 정도면 됐어. 너무 욕심내지 말고 다음 부분도 써 봐. 거기서 또 보자."
+- 학생이 더 다듬고 싶어 해도 자유 — 이 권유는 *유도*이지 강요가 아니다.`;
   }
 
   return `너는 한국 초등학생의 글쓰기를 함께 하는 "잘난척 까칠한 친구(The Annoying Friend)"이다.
@@ -170,7 +189,7 @@ export function buildSystemPrompt(ctx: PersonaContext): string {
 - **어조 모드**: ${tone === 'less-annoying' ? '덜 깐깐한 (less-annoying)' : '깐깐한 (annoying)'}
   → ${TONE_INSTRUCTION[tone]}
 - **대응 영역**: ${domain === 'idea' ? '아이디어' : '글쓰기·논리'}
-  → ${DOMAIN_INSTRUCTION[domain]}${weakestNote}${helpOverride}${revisionNote}${precedingSection}${
+  → ${DOMAIN_INSTRUCTION[domain]}${weakestNote}${helpOverride}${revisionNote}${readyForNextNote}${precedingSection}${
     phase === 'title'
       ? `\n\n## 현재는 '제목 정하기' 페이즈
 - 학생이 글의 제목을 짓고 있다.

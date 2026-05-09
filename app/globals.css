@@ -95,6 +95,23 @@ button:active:not(:disabled) {
   animation: wiggle 400ms ease-in-out;
 }
 
+/* "다음으로" 권유 펄스 — readyForNext 시점에 학생 시선 유도 */
+@keyframes readyPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7),
+                0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(16, 185, 129, 0),
+                0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    transform: scale(1.04);
+  }
+}
+.ready-pulse {
+  animation: readyPulse 1.6s ease-in-out infinite;
+}
+
 @keyframes slideInRight {
   from { opacity: 0; transform: translateX(20px); }
   to { opacity: 1; transform: translateX(0); }

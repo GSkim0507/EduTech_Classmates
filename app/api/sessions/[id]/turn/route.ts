@@ -189,6 +189,7 @@ export async function POST(
   let signals: Signals = {};
   let curriculumSignals: CurriculumSignals | null = null;
   let calibrationId: number | null = null;
+  let readyForNext = false;
 
   if (trigger === 'submit' && (latestDraft || isBodyAllMode)) {
     // LLM 평가 (5 평가요소 + 헌법 신호)
@@ -233,6 +234,7 @@ export async function POST(
     nextTone = calib.nextTone;
     nextDomain = calib.nextDomain;
     weakestViolationLabel = calib.weakestViolationLabel;
+    readyForNext = calib.readyForNext;
 
     // calibration 저장
     const calibRow = await db.execute({
@@ -299,6 +301,7 @@ export async function POST(
     forcedHelpDomain: trigger === 'help' ? helpDomain ?? null : null,
     revisionIdx,
     previousVersion,
+    readyForNext,
   });
 
   // history 정리: 같은 phase·paragraph 내 마지막 student-assistant pair만 + 다른 phase는 요약 생략
@@ -378,6 +381,7 @@ export async function POST(
     assistantMessage,
     tone: nextTone,
     domain: nextDomain,
+    readyForNext,
     calibration:
       trigger === 'submit'
         ? {
@@ -386,6 +390,7 @@ export async function POST(
             weakestViolationLabel,
             signals,
             curriculumSignals,
+            readyForNext,
           }
         : undefined,
   });
