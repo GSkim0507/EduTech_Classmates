@@ -10,13 +10,16 @@ export interface BodyParagraph {
 
 export interface BodyParagraphListProps {
   paragraphs: BodyParagraph[];
-  /** 강조 안 함 모드(본론 전체 자유 편집)에서는 -1 또는 미지정 */
-  currentParagraphIdx?: number;
   onChange: (idx: number, content: string) => void;
   onAdd: () => void;            // 최대 5
   onRemove: (idx: number) => void; // 최소 3
-  onSelect?: (idx: number) => void;
-  disabled?: boolean;            // 전체 비활성 (api 호출 중)
+  /** 학생이 이 문단에 대해 도움 요청 */
+  onHelp: (idx: number) => void;
+  /** 학생이 이 문단을 친구에게 보여주기 */
+  onShow: (idx: number) => void;
+  disabled?: boolean;
+  /** 액션 진행 중인 paragraph idx (해당 박스 약간 강조) */
+  busyIdx?: number | null;
 }
 
 const MIN_PARAGRAPHS = 3;
@@ -27,11 +30,13 @@ export default function BodyParagraphList({
   onChange,
   onAdd,
   onRemove,
+  onHelp,
+  onShow,
   disabled,
+  busyIdx,
 }: BodyParagraphListProps) {
   const refs = useRef<(HTMLTextAreaElement | null)[]>([]);
 
-  // 새 문단 추가되면 그 문단으로 자동 포커스
   useEffect(() => {
     const last = paragraphs[paragraphs.length - 1];
     if (last && !last.committed && !last.content) {
@@ -46,6 +51,8 @@ export default function BodyParagraphList({
     <div className="space-y-4">
       {paragraphs.map((p) => {
         const isCommitted = p.committed;
+        const isBusy = busyIdx === p.idx;
+        const isEmpty = !p.content.trim();
 
         return (
           <div
@@ -53,7 +60,9 @@ export default function BodyParagraphList({
             className={`rounded-2xl border-2 transition ${
               isCommitted
                 ? 'border-emerald-200 bg-emerald-50/40'
-                : 'border-amber-200 bg-white hover:border-amber-300'
+                : isBusy
+                  ? 'border-amber-400 bg-white shadow-md scale-[1.005]'
+                  : 'border-amber-200 bg-white hover:border-amber-300'
             }`}
           >
             <div className="flex items-center justify-between px-5 py-2.5 border-b border-stone-100">
@@ -91,6 +100,7 @@ export default function BodyParagraphList({
                 )}
               </div>
             </div>
+
             <textarea
               ref={(el) => {
                 refs.current[p.idx] = el;
@@ -106,10 +116,34 @@ export default function BodyParagraphList({
               spellCheck={false}
               autoCorrect="off"
               autoCapitalize="off"
-              className={`draft-input w-full min-h-[140px] resize-none px-5 py-3 text-stone-800 focus:outline-none placeholder:text-stone-300 rounded-b-2xl ${
+              className={`draft-input w-full min-h-[140px] resize-none px-5 py-3 text-stone-800 focus:outline-none placeholder:text-stone-300 ${
                 isCommitted ? 'bg-stone-50/60 cursor-not-allowed' : 'bg-white'
               }`}
             />
+
+            {/* 문단별 액션 버튼 */}
+            {!isCommitted && (
+              <div className="px-4 pb-3 pt-2 flex flex-wrap gap-2 justify-end border-t border-amber-50">
+                <button
+                  type="button"
+                  onClick={() => onHelp(p.idx)}
+                  disabled={disabled || isEmpty}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold border-2 border-stone-200 bg-white text-stone-700 hover:bg-stone-50 hover:scale-[1.04] disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed"
+                  title={isEmpty ? '먼저 문단을 조금 써 보자' : `이 문단(${p.idx + 1}문단)에 대해 도움 받기`}
+                >
+                  💭 도움
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onShow(p.idx)}
+                  disabled={disabled || isEmpty}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-400 hover:bg-amber-500 text-white shadow-sm hover:scale-[1.04] disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed"
+                  title={isEmpty ? '먼저 문단을 조금 써 보자' : `이 문단(${p.idx + 1}문단)을 친구한테 보여주기`}
+                >
+                  👀 친구한테 보여주기
+                </button>
+              </div>
+            )}
           </div>
         );
       })}

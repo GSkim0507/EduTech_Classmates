@@ -54,7 +54,7 @@ interface SessionState {
 }
 
 type ConfirmKind =
-  | { kind: 'submit' }
+  | { kind: 'submit'; paragraphIdx?: number }
   | { kind: 'commit' }
   | { kind: 'finalize' }
   | { kind: 'regress'; phase: Exclude<Phase, 'done'>; paragraphIdx: number }
@@ -88,6 +88,8 @@ export default function WritePage({
     'submit' | 'help' | 'commit' | 'regress' | null
   >(null);
   const [helpModalOpen, setHelpModalOpen] = useState(false);
+  // body phase에서 도움받기/보여주기를 어느 문단에 대해 호출했는지 추적
+  const [helpForBodyIdx, setHelpForBodyIdx] = useState<number | null>(null);
   const [confirmKind, setConfirmKind] = useState<ConfirmKind>(null);
 
   const lastSavedRef = useRef<{ phase: Phase; paragraphIdx: number; content: string } | null>(
@@ -289,6 +291,20 @@ export default function WritePage({
     lastSavedRef.current = null;
     scheduleAutosave(content);
   }
+  // body paragraph별 도움/보여주기 핸들러
+  function handleParagraphHelp(idx: number) {
+    setHelpForBodyIdx(idx);
+    setCurrentBodyIdx(idx);
+    lastSavedRef.current = null;
+    setHelpModalOpen(true);
+  }
+  function handleParagraphShow(idx: number) {
+    setHelpForBodyIdx(idx);
+    setCurrentBodyIdx(idx);
+    lastSavedRef.current = null;
+    setConfirmKind({ kind: 'submit', paragraphIdx: idx });
+  }
+
   function handleBodyAdd() {
     setBodyParagraphs((prev) =>
       prev.length >= MAX_PARA
@@ -324,8 +340,13 @@ export default function WritePage({
         body: JSON.stringify({
           apiKey,
           trigger: 'help',
-          // body 페이즈는 전체 모드 (paragraphIdx 안 보냄)
-          paragraphIdx: phase === 'body' ? null : 0,
+          // body 페이즈는 학생이 클릭한 문단(helpForBodyIdx)에 대해 평가
+          paragraphIdx:
+            phase === 'body'
+              ? typeof helpForBodyIdx === 'number'
+                ? helpForBodyIdx
+                : null
+              : 0,
           helpDomain: domain,
         }),
       });
@@ -341,12 +362,21 @@ export default function WritePage({
   }
 
   // ─── 친구한테 보여주기 (submit) ───
-  async function performSubmit() {
+  async function performSubmit(targetParagraphIdx?: number) {
     setError(null);
-    const text = getCurrentText();
+    // body 페이즈에서 학생이 클릭한 문단의 텍스트 검사
+    const text =
+      phase === 'body' && typeof targetParagraphIdx === 'number'
+        ? bodyParagraphs[targetParagraphIdx]?.content ?? ''
+        : getCurrentText();
     if (!text.trim()) {
       setError('일단 글을 조금 써 봐.');
       return;
+    }
+    if (phase === 'body' && typeof targetParagraphIdx === 'number') {
+      setHelpForBodyIdx(targetParagraphIdx);
+      setCurrentBodyIdx(targetParagraphIdx); // autosave 정렬
+      lastSavedRef.current = null;
     }
     await flushAutosave();
     setPendingAction('submit');
@@ -357,8 +387,13 @@ export default function WritePage({
         body: JSON.stringify({
           apiKey,
           trigger: 'submit',
-          // body 페이즈는 전체 모드
-          paragraphIdx: phase === 'body' ? null : 0,
+          // body는 학생이 클릭한 문단에 대해, 그 외는 0
+          paragraphIdx:
+            phase === 'body'
+              ? typeof targetParagraphIdx === 'number'
+                ? targetParagraphIdx
+                : null
+              : 0,
         }),
       });
       const data = await res.json();
@@ -485,11 +520,8 @@ export default function WritePage({
 
   const session = state.session;
   const turns = state.turns;
-  const matchingTurns = turns.filter((t) => {
-    if (t.phase !== phase) return false;
-    if (phase !== 'body') return true;
-    return t.paragraph_idx === currentParagraphIdx;
-  });
+  // 본론은 모든 paragraph 대화를 다 보여줌 (어느 문단 피드백인지 라벨로 구분)
+  const matchingTurns = turns.filter((t) => t.phase === phase);
 
   const phaseIdx = PHASE_ORDER.indexOf(phase);
   const overallProgress = phase === 'body'
@@ -623,7 +655,14 @@ export default function WritePage({
                 onChange={handleBodyChange}
                 onAdd={handleBodyAdd}
                 onRemove={handleBodyRemove}
+                onHelp={handleParagraphHelp}
+                onShow={handleParagraphShow}
                 disabled={pendingAction !== null}
+                busyIdx={
+                  pendingAction === 'submit' || pendingAction === 'help'
+                    ? helpForBodyIdx
+                    : null
+                }
               />
             )}
             {phase === 'conclusion' && (
@@ -666,20 +705,28 @@ export default function WritePage({
           </div>
 
           <div className="px-6 py-4 border-t-2 border-amber-50 flex flex-wrap gap-2 justify-end">
-            <button
-              onClick={() => setHelpModalOpen(true)}
-              disabled={pendingAction !== null}
-              className="px-5 py-3 rounded-2xl text-base font-bold border-2 border-stone-200 bg-white text-stone-700 hover:bg-stone-50 hover:scale-[1.03] disabled:opacity-50 disabled:hover:scale-100"
-            >
-              💭 도움 받기
-            </button>
-            <button
-              onClick={() => setConfirmKind({ kind: 'submit' })}
-              disabled={pendingAction !== null}
-              className="px-5 py-3 rounded-2xl text-base font-bold bg-amber-400 hover:bg-amber-500 text-white shadow-md hover:scale-[1.03] disabled:opacity-50 disabled:hover:scale-100"
-            >
-              👀 친구한테 보여주기
-            </button>
+            {/* 본론 phase는 문단별 [💭][👀] 버튼 사용. 전역 [💭][👀]은 숨김. */}
+            {phase !== 'body' && (
+              <>
+                <button
+                  onClick={() => {
+                    setHelpForBodyIdx(null);
+                    setHelpModalOpen(true);
+                  }}
+                  disabled={pendingAction !== null}
+                  className="px-5 py-3 rounded-2xl text-base font-bold border-2 border-stone-200 bg-white text-stone-700 hover:bg-stone-50 hover:scale-[1.03] disabled:opacity-50 disabled:hover:scale-100"
+                >
+                  💭 도움 받기
+                </button>
+                <button
+                  onClick={() => setConfirmKind({ kind: 'submit' })}
+                  disabled={pendingAction !== null}
+                  className="px-5 py-3 rounded-2xl text-base font-bold bg-amber-400 hover:bg-amber-500 text-white shadow-md hover:scale-[1.03] disabled:opacity-50 disabled:hover:scale-100"
+                >
+                  👀 친구한테 보여주기
+                </button>
+              </>
+            )}
             <button
               onClick={() =>
                 setConfirmKind({
@@ -689,7 +736,11 @@ export default function WritePage({
               disabled={pendingAction !== null}
               className="px-5 py-3 rounded-2xl text-base font-bold bg-emerald-500 hover:bg-emerald-600 text-white shadow-md hover:scale-[1.03] disabled:opacity-50 disabled:hover:scale-100"
             >
-              {phase === 'title' ? '✅ 글 마무리' : '➡️ 다음으로'}
+              {phase === 'title'
+                ? '✅ 글 마무리'
+                : phase === 'body'
+                  ? '➡️ 본론 마무리 → 결론으로'
+                  : '➡️ 다음으로'}
             </button>
           </div>
         </section>
@@ -771,15 +822,21 @@ export default function WritePage({
       {/* Confirm Dialogs */}
       <ConfirmDialog
         open={confirmKind?.kind === 'submit'}
-        title="친구한테 보여줄까?"
+        title={
+          confirmKind?.kind === 'submit' && typeof confirmKind.paragraphIdx === 'number'
+            ? `본론 ${confirmKind.paragraphIdx + 1}문단 보여줄까?`
+            : '친구한테 보여줄까?'
+        }
         emoji="👀"
         message={`네 글을 까칠한 친구가 한 번 봐줄게.\n친구가 약올라할지 잘난 척할지 모르지만 괜찮지?`}
         confirmText="응, 보여줄게"
         cancelText="아직"
         variant="primary"
         onConfirm={() => {
+          const idx =
+            confirmKind?.kind === 'submit' ? confirmKind.paragraphIdx : undefined;
           setConfirmKind(null);
-          performSubmit();
+          performSubmit(idx);
         }}
         onCancel={() => setConfirmKind(null)}
       />
@@ -871,18 +928,32 @@ export default function WritePage({
 // ─── 부속 ───
 function ChatBubble({ turn }: { turn: TurnRow }) {
   const isStudent = turn.role === 'student';
+  // 본론에서 어느 문단인지 라벨 (intro/conclusion/title 등은 표시 안 함)
+  const paraTag =
+    turn.phase === 'body' && typeof turn.paragraph_idx === 'number'
+      ? `본론 ${turn.paragraph_idx + 1}문단`
+      : null;
+
   if (isStudent) {
     return (
       <div className="flex justify-end slide-in-right">
         <div className="max-w-[85%] rounded-2xl rounded-br-sm px-4 py-2.5 bg-emerald-100 border-2 border-emerald-200 text-stone-800 text-sm whitespace-pre-wrap leading-relaxed">
-          {turn.triggered_by === 'submit' && (
-            <div className="text-xs text-emerald-700 font-bold mb-1">👀 보여주기</div>
-          )}
-          {turn.triggered_by === 'help' && (
-            <div className="text-xs text-emerald-700 font-bold mb-1">
-              💭 도움 요청{turn.help_domain ? ` (${helpDomainLabel(turn.help_domain)})` : ''}
-            </div>
-          )}
+          <div className="flex items-center gap-1.5 flex-wrap mb-1">
+            {paraTag && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-200 text-emerald-900 font-bold">
+                {paraTag}
+              </span>
+            )}
+            {turn.triggered_by === 'submit' && (
+              <span className="text-xs text-emerald-700 font-bold">👀 보여주기</span>
+            )}
+            {turn.triggered_by === 'help' && (
+              <span className="text-xs text-emerald-700 font-bold">
+                💭 도움 요청
+                {turn.help_domain ? ` (${helpDomainLabel(turn.help_domain)})` : ''}
+              </span>
+            )}
+          </div>
           {turn.content}
         </div>
       </div>
@@ -899,6 +970,11 @@ function ChatBubble({ turn }: { turn: TurnRow }) {
             : undefined
         }
       >
+        {paraTag && (
+          <div className="text-[10px] px-1.5 py-0.5 inline-block rounded-full bg-amber-200 text-amber-900 font-bold mb-1">
+            {paraTag}
+          </div>
+        )}
         {turn.content}
       </div>
     </div>
