@@ -49,11 +49,11 @@ export async function POST(
     return NextResponse.json({ error: 'Claude API 키가 필요합니다.' }, { status: 400 });
   }
 
-  if (session.current_phase !== 'done' && session.current_phase !== 'conclusion') {
+  if (session.current_phase !== 'done' && session.current_phase !== 'title') {
     return NextResponse.json(
       {
         error:
-          '결론까지 작성 + 확정한 후에 closure를 생성할 수 있습니다. (현재 phase: ' +
+          '제목까지 확정한 후에 closure를 생성할 수 있습니다. (현재 phase: ' +
           session.current_phase +
           ')',
       },

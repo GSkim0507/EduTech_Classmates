@@ -46,6 +46,7 @@ const PHASE_LABEL: Record<Exclude<Phase, 'done'>, string> = {
   intro: '서론',
   body: '본론',
   conclusion: '결론',
+  title: '제목',
 };
 
 function buildPrecedingSection(ctx: PersonaContext): string {
@@ -57,6 +58,9 @@ function buildPrecedingSection(ctx: PersonaContext): string {
     ctx.preceding.bodyParagraphs.forEach((p, i) => {
       lines.push(`[본론 ${i + 1}문단 (확정본)]\n${p}`);
     });
+  }
+  if (ctx.preceding?.conclusion) {
+    lines.push(`[결론 (확정본)]\n${ctx.preceding.conclusion}`);
   }
   if (lines.length === 0) return '';
   return `\n## 학생 글의 맥락 (앞에서 이미 쓴 부분)\n${lines.join('\n\n')}\n\n이 맥락에 비추어 현재 글의 일관성·중복·정합성을 판단해라.`;
@@ -150,7 +154,19 @@ export function buildSystemPrompt(ctx: PersonaContext): string {
 - **어조 모드**: ${tone === 'less-annoying' ? '덜 깐깐한 (less-annoying)' : '깐깐한 (annoying)'}
   → ${TONE_INSTRUCTION[tone]}
 - **대응 영역**: ${domain === 'idea' ? '아이디어' : '글쓰기·논리'}
-  → ${DOMAIN_INSTRUCTION[domain]}${weakestNote}${helpOverride}${precedingSection}
+  → ${DOMAIN_INSTRUCTION[domain]}${weakestNote}${helpOverride}${precedingSection}${
+    phase === 'title'
+      ? `\n\n## 현재는 '제목 정하기' 페이즈
+- 학생이 글의 제목을 짓고 있다.
+- 제목은 단 한 줄, 보통 10~25자 정도가 적당.
+- 좋은 제목의 조건:
+  · 글 전체의 핵심 명제(주장)를 분명히 또는 매력적으로 드러냄
+  · 단순 주제 나열이 아니라 주장이 보이거나 호기심 유발
+  · 너무 길거나 너무 모호하지 않음
+- 학생 제목을 보고 위 기준에 비추어 친구로서 짧게(한두 문장) 되묻거나 인정해라.
+- 절대 대신 제목을 지어주지 말 것. 학생이 스스로 다듬도록 유도.`
+      : ''
+  }
 
 ## 헌법 (학생이 따라야 할 객관적 글쓰기 규칙)
 
@@ -177,7 +193,7 @@ ${curriculum}
 
 interface ClosurePromptContext {
   session: SessionRow;
-  fullDraft: { intro: string; body: string; conclusion: string };
+  fullDraft: { intro: string; body: string; conclusion: string; title?: string };
   rebuttalsAndResponses: string;
 }
 
@@ -185,7 +201,7 @@ export function buildClosurePrompt(ctx: ClosurePromptContext): string {
   const { session, fullDraft, rebuttalsAndResponses } = ctx;
   const dimensionsText = FIVE_DIMENSIONS.map((d) => `- ${d.label}: ${d.prompt}`).join('\n');
 
-  return `너는 한국 초등학생 "${session.persona_name}"(${session.grade}학년)와 함께 글쓰기를 했던 잘난척 까칠한 친구이다. 학생이 결론까지 제출했고, 이제 글 전체를 다시 읽고 너의 잔여 동의도(persuasion outcome)를 학생에게 솔직하게 알릴 차례다.
+  return `너는 한국 초등학생 "${session.persona_name}"(${session.grade}학년)와 함께 글쓰기를 했던 잘난척 까칠한 친구이다. 학생이 제목까지 정해 글을 마무리했고, 이제 글 전체를 다시 읽고 너의 잔여 동의도(persuasion outcome)를 학생에게 솔직하게 알릴 차례다.
 
 ## 게임 페르소나 (closure에도 반영)
 - 학생이 잘 썼으면 **약이 오르면서도 인정**한다 (full or partial high).
@@ -198,6 +214,7 @@ ${dimensionsText}
 
 ## 학생의 최종 글
 주제: ${session.topic}
+${fullDraft.title ? `제목: ${fullDraft.title}` : '(제목 없음)'}
 
 [서론]
 ${fullDraft.intro || '(작성 안 됨)'}

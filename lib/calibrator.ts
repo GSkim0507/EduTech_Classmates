@@ -7,6 +7,7 @@ import type {
   IntroCurriculumSignals,
   BodyCurriculumSignals,
   ConclusionCurriculumSignals,
+  TitleCurriculumSignals,
 } from './types';
 import {
   FIVE_DIMENSIONS,
@@ -73,7 +74,7 @@ function analyzeCurriculum(cur: CurriculumSignals | null): {
       });
     if (!c.link_word_used)
       violations.push({ key: 'link_word_used', severity: 0.4 });
-  } else {
+  } else if (cur.phase === 'conclusion') {
     const c = cur as ConclusionCurriculumSignals;
     if (!c.summary_present) violations.push({ key: 'summary_present', severity: 0.9 });
     if (!c.summary_concise) violations.push({ key: 'summary_concise', severity: 0.5 });
@@ -83,10 +84,29 @@ function analyzeCurriculum(cur: CurriculumSignals | null): {
       violations.push({ key: 'no_new_argument', severity: 0.85 });
     if (!c.thesis_recall_clear)
       violations.push({ key: 'thesis_recall_clear', severity: 0.7 });
+  } else {
+    // title
+    const c = cur as TitleCurriculumSignals;
+    if (!c.title_present) violations.push({ key: 'title_present', severity: 1.0 });
+    if (!c.title_concise) violations.push({ key: 'title_concise', severity: 0.5 });
+    if (c.title_relevant_to_thesis < 0.5)
+      violations.push({
+        key: 'title_relevant_to_thesis',
+        severity: 1.0 - c.title_relevant_to_thesis,
+      });
+    if (!c.title_intriguing_or_assertive)
+      violations.push({ key: 'title_intriguing_or_assertive', severity: 0.6 });
   }
 
   // 페이즈별 총 체크 항목 수 (대략)
-  const totalChecks = cur.phase === 'intro' ? 3 : cur.phase === 'body' ? 5 : 5;
+  const totalChecks =
+    cur.phase === 'intro'
+      ? 3
+      : cur.phase === 'body'
+        ? 5
+        : cur.phase === 'conclusion'
+          ? 5
+          : 4; // title
 
   // 가장 심각한 위반 = 가장 약한 신호
   let weakestLabel: string | null = null;

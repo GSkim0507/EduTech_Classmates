@@ -116,7 +116,7 @@ export default function ResultPage({
   const draftMap = new Map(drafts.map((d) => [d.id, d]));
 
   function getCommittedContent(
-    phase: 'intro' | 'body' | 'conclusion',
+    phase: 'intro' | 'body' | 'conclusion' | 'title',
     paragraphIdx: number
   ): string {
     const draftId = commitMap.get(`${phase}-${paragraphIdx}`);
@@ -126,6 +126,7 @@ export default function ResultPage({
 
   const intro = getCommittedContent('intro', 0);
   const conclusion = getCommittedContent('conclusion', 0);
+  const title = session.title ?? getCommittedContent('title', 0);
 
   // 본론은 paragraph_idx 0..4 중 commit된 것만
   const bodyParagraphs: { idx: number; content: string }[] = [];
@@ -225,6 +226,18 @@ export default function ResultPage({
 
         <section className="bg-white rounded-3xl border-2 border-amber-100 shadow-sm p-6 mb-6 fade-in">
           <h2 className="font-display text-2xl text-stone-800 mb-4">📜 네가 쓴 글</h2>
+
+          {title && (
+            <div className="mb-6 pb-5 border-b-2 border-amber-100 text-center">
+              <div className="text-xs font-bold text-amber-600 uppercase tracking-wide mb-1">
+                제목
+              </div>
+              <h3 className="font-display text-3xl text-stone-800 leading-snug">
+                {title}
+              </h3>
+            </div>
+          )}
+
           <article className="space-y-5 text-stone-800 leading-relaxed">
             <DraftBlock label="서론" content={intro} />
             {bodyParagraphs.length > 0 ? (

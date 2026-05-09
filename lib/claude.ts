@@ -6,6 +6,7 @@ import type {
   IntroCurriculumSignals,
   BodyCurriculumSignals,
   ConclusionCurriculumSignals,
+  TitleCurriculumSignals,
 } from './types';
 
 // ──────────────────────────────────────────────────────────
@@ -59,7 +60,7 @@ export async function callClaude({
 export interface EvaluateDraftInput {
   apiKey: string;
   draftText: string;
-  phase: 'intro' | 'body' | 'conclusion';
+  phase: 'intro' | 'body' | 'conclusion' | 'title';
   topic: string;
   paragraphIdx?: number;          // 본론 i문단 평가 시 i (0-based)
   preceding?: PrecedingContent;   // 직전 phase/문단 commit 본
@@ -75,6 +76,7 @@ const PHASE_LABEL_KO: Record<EvaluateDraftInput['phase'], string> = {
   intro: '서론',
   body: '본론',
   conclusion: '결론',
+  title: '제목',
 };
 
 function buildEvaluatePrompt(input: EvaluateDraftInput): string {
@@ -102,7 +104,7 @@ function buildEvaluatePrompt(input: EvaluateDraftInput): string {
   "appropriateness_to_preceding": 0.0~1.0,
   "link_word_used": boolean
 }`;
-  } else {
+  } else if (input.phase === 'conclusion') {
     curriculumSchema = `
 "curriculum": {
   "phase": "conclusion",
@@ -112,6 +114,16 @@ function buildEvaluatePrompt(input: EvaluateDraftInput): string {
   "punch_line_method_label": "주장 재강조" | "미래 전망" | "속담·명언" | null,
   "no_new_argument": boolean,
   "thesis_recall_clear": boolean
+}`;
+  } else {
+    // title
+    curriculumSchema = `
+"curriculum": {
+  "phase": "title",
+  "title_present": boolean,
+  "title_concise": boolean (10~25자 권장),
+  "title_relevant_to_thesis": 0.0~1.0 (서론·본론·결론 전체 글의 핵심 명제와 일관성),
+  "title_intriguing_or_assertive": boolean (단순 주제 나열이 아니라 주장이 보이거나 호기심 유발)
 }`;
   }
 
@@ -245,6 +257,14 @@ export async function evaluateDraft(
         no_new_argument: !!rawCur.no_new_argument,
         thesis_recall_clear: !!rawCur.thesis_recall_clear,
       } as ConclusionCurriculumSignals;
+    } else if (input.phase === 'title' && rawCur.phase === 'title') {
+      curriculum = {
+        phase: 'title',
+        title_present: !!rawCur.title_present,
+        title_concise: !!rawCur.title_concise,
+        title_relevant_to_thesis: clampNum(rawCur.title_relevant_to_thesis),
+        title_intriguing_or_assertive: !!rawCur.title_intriguing_or_assertive,
+      } as TitleCurriculumSignals;
     }
   }
 

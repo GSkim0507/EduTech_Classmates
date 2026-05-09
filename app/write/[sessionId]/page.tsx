@@ -28,8 +28,9 @@ const PHASE_LABEL: Record<Exclude<Phase, 'done'>, string> = {
   intro: '서론',
   body: '본론',
   conclusion: '결론',
+  title: '제목',
 };
-const PHASE_ORDER: Exclude<Phase, 'done'>[] = ['intro', 'body', 'conclusion'];
+const PHASE_ORDER: Exclude<Phase, 'done'>[] = ['intro', 'body', 'conclusion', 'title'];
 
 const PHASE_HINT: Record<Exclude<Phase, 'done'>, string> = {
   intro:
@@ -38,6 +39,8 @@ const PHASE_HINT: Record<Exclude<Phase, 'done'>, string> = {
     '본론은 두세~다섯 문단으로 구성해. 각 문단마다 소주제문 + 다각적 논증(부연/예증/비유/방법/인과)을 써줘.',
   conclusion:
     '결론은 본론의 근거를 짧게 정리하고, 핵심 명제를 강조하는 한 문장으로 마무리해. 새 근거는 추가하지 말고.',
+  title:
+    '글 전체를 잘 보여줄 제목을 한 줄로 정해봐. 너무 길지 않게(10~25자), 주장이나 호기심이 보이게!',
 };
 
 interface SessionState {
@@ -72,9 +75,10 @@ export default function WritePage({
   const [error, setError] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState('');
 
-  // 서론·결론 단일 draft / 본론 다문단
+  // 서론·결론·제목 단일 draft / 본론 다문단
   const [introText, setIntroText] = useState('');
   const [conclusionText, setConclusionText] = useState('');
+  const [titleText, setTitleText] = useState('');
   const [bodyParagraphs, setBodyParagraphs] = useState<BodyParagraph[]>([]);
   const [currentBodyIdx, setCurrentBodyIdx] = useState(0);
 
@@ -119,6 +123,10 @@ export default function WritePage({
       // 결론 복원
       const conclDrafts = drafts.filter((d) => d.phase === 'conclusion');
       setConclusionText(conclDrafts[conclDrafts.length - 1]?.content ?? '');
+
+      // 제목 복원
+      const titleDrafts = drafts.filter((d) => d.phase === 'title');
+      setTitleText(titleDrafts[titleDrafts.length - 1]?.content ?? '');
 
       // 본론 복원 — paragraph_idx별 최신 draft + commit 여부
       const bodyDraftsByIdx: Record<number, DraftRow[]> = {};
@@ -191,6 +199,7 @@ export default function WritePage({
   function getCurrentText(): string {
     if (phase === 'intro') return introText;
     if (phase === 'conclusion') return conclusionText;
+    if (phase === 'title') return titleText;
     return bodyParagraphs[currentBodyIdx]?.content ?? '';
   }
 
@@ -265,6 +274,11 @@ export default function WritePage({
   function handleConclusionChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const v = e.target.value;
     setConclusionText(v);
+    scheduleAutosave(v);
+  }
+  function handleTitleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const v = e.target.value;
+    setTitleText(v);
     scheduleAutosave(v);
   }
   function handleBodyChange(idx: number, content: string) {
@@ -500,6 +514,12 @@ export default function WritePage({
       d.phase === 'intro' &&
       commits.some((c) => c.phase === 'intro' && c.committed_draft_id === d.id)
   );
+  const conclusionCommitDraft = drafts.find(
+    (d) =>
+      d.phase === 'conclusion' &&
+      commits.some((c) => c.phase === 'conclusion' && c.committed_draft_id === d.id)
+  );
+  const conclusionCommitContent = conclusionCommitDraft?.content;
   const bodyCommitsByIdx = bodyParagraphs
     .filter((p) => p.committed)
     .map((p) => p.content);
@@ -578,13 +598,16 @@ export default function WritePage({
             </p>
           </div>
 
-          {/* PrecedingContext (본론 i>0 또는 결론) */}
-          {(phase === 'body' && currentBodyIdx > 0) || phase === 'conclusion' ? (
+          {/* PrecedingContext (본론 i>0 또는 결론 또는 제목) */}
+          {(phase === 'body' && currentBodyIdx > 0) ||
+          phase === 'conclusion' ||
+          phase === 'title' ? (
             <div className="px-5 pt-4">
               <PrecedingContext
                 intro={introCommit?.content}
                 bodyParagraphs={bodyCommitsByIdx}
-                currentPhase={phase as 'body' | 'conclusion'}
+                conclusion={conclusionCommitContent}
+                currentPhase={phase as 'body' | 'conclusion' | 'title'}
                 currentParagraphIdx={phase === 'body' ? currentBodyIdx : undefined}
               />
             </div>
@@ -627,6 +650,31 @@ export default function WritePage({
                 className="draft-input w-full min-h-[300px] resize-none px-5 py-4 text-stone-800 focus:outline-none placeholder:text-stone-300 rounded-2xl border-2 border-amber-200 bg-amber-50/30"
               />
             )}
+            {phase === 'title' && (
+              <div className="px-3 py-6">
+                <label className="block">
+                  <span className="font-display text-2xl text-amber-700 mb-2 inline-block">
+                    📚 글의 제목
+                  </span>
+                  <input
+                    type="text"
+                    value={titleText}
+                    onChange={handleTitleChange}
+                    placeholder="예: 책은 매일 우리를 키우는 작은 친구"
+                    maxLength={50}
+                    spellCheck={false}
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    disabled={pendingAction !== null}
+                    className="mt-2 w-full text-xl font-display rounded-2xl border-2 border-amber-300 px-5 py-4 focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-100 bg-amber-50/30 placeholder:text-stone-300"
+                  />
+                </label>
+                <p className="text-xs text-stone-500 mt-3 leading-relaxed">
+                  💡 좋은 제목은: ① 글 전체 주장이 보이거나 호기심이 생긴다, ② 너무
+                  길지 않다(10–25자), ③ 단순 주제 나열이 아니다.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="px-6 py-4 border-t-2 border-amber-50 flex flex-wrap gap-2 justify-end">
@@ -647,13 +695,13 @@ export default function WritePage({
             <button
               onClick={() =>
                 setConfirmKind({
-                  kind: phase === 'conclusion' ? 'finalize' : 'commit',
+                  kind: phase === 'title' ? 'finalize' : 'commit',
                 })
               }
               disabled={pendingAction !== null}
               className="px-5 py-3 rounded-2xl text-base font-bold bg-emerald-500 hover:bg-emerald-600 text-white shadow-md hover:scale-[1.03] disabled:opacity-50 disabled:hover:scale-100"
             >
-              {phase === 'conclusion' ? '✅ 글 마무리' : '➡️ 다음으로'}
+              {phase === 'title' ? '✅ 글 마무리' : '➡️ 다음으로'}
             </button>
           </div>
         </section>
@@ -662,8 +710,14 @@ export default function WritePage({
         <aside className="bg-white rounded-3xl border-2 border-amber-100 shadow-sm flex flex-col max-h-[calc(100vh-180px)] fade-in">
           <div className="px-5 py-4 border-b-2 border-amber-50 bg-gradient-to-br from-amber-50 to-rose-50 rounded-t-3xl">
             <div className="flex items-center gap-3 mb-3">
-              <div className={pendingAction && pendingAction !== 'commit' ? 'wiggle' : ''}>
-                <FriendFace tone={currentMood} size={64} />
+              <div
+                className={
+                  pendingAction && pendingAction !== 'commit' && pendingAction !== 'regress'
+                    ? 'wiggle'
+                    : 'friend-idle'
+                }
+              >
+                <FriendFace tone={currentMood} size={96} />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="font-display text-lg text-stone-800">
@@ -746,7 +800,9 @@ export default function WritePage({
         title={
           phase === 'body'
             ? `본론 ${currentParagraphIdx + 1}문단 확정?`
-            : '다음으로 넘어갈까?'
+            : phase === 'conclusion'
+              ? '결론 확정하고 제목 정하러 갈까?'
+              : '다음으로 넘어갈까?'
         }
         emoji="➡️"
         message={
@@ -756,7 +812,9 @@ export default function WritePage({
                   ? '결론으로 넘어가.'
                   : `본론 ${currentParagraphIdx + 2}문단으로 넘어가.`
               }\n나중에 다시 돌아올 수는 있어!`
-            : `이 ${PHASE_LABEL[phase]}은 이 정도면 됐다고 생각하는 거지?\n다음 단계로 넘어가도 나중에 돌아올 수 있어.`
+            : phase === 'conclusion'
+              ? '결론까지 다 썼네! 이제 글의 제목을 정할 차례야.\n나중에 다시 돌아올 수 있어.'
+              : `이 ${PHASE_LABEL[phase]}은 이 정도면 됐다고 생각하는 거지?\n다음 단계로 넘어가도 나중에 돌아올 수 있어.`
         }
         confirmText="응, 다음으로!"
         cancelText="조금 더 다듬을게"
@@ -771,7 +829,7 @@ export default function WritePage({
         open={confirmKind?.kind === 'finalize'}
         title="글 마무리할까?"
         emoji="🎉"
-        message="결론까지 다 썼으면, 친구가 너의 글 전체를 보고\n얼마나 설득됐는지 솔직하게 말해줄 거야."
+        message="제목까지 정했으면, 친구가 너의 글 전체를 보고\n얼마나 설득됐는지 솔직하게 말해줄 거야."
         confirmText="✨ 마무리!"
         cancelText="조금 더 다듬을게"
         variant="go"

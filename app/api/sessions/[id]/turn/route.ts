@@ -122,9 +122,13 @@ export async function POST(
       .filter((p) => p.paragraph_idx < paragraphIdx)
       .map((p) => p.content);
   }
-  if (phase === 'conclusion') {
+  if (phase === 'conclusion' || phase === 'title') {
     const allBody = await getCommittedBodyParagraphs(id);
     preceding.bodyParagraphs = allBody.map((p) => p.content);
+  }
+  if (phase === 'title') {
+    const conclCommit = await getCommittedDraftParagraph(id, 'conclusion', 0);
+    if (conclCommit) preceding.conclusion = conclCommit.content;
   }
 
   // ─── tone/domain/calibration 결정 ───

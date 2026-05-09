@@ -8,7 +8,7 @@ import {
 } from '@/lib/queries';
 import type { CommitRequestInput, Phase } from '@/lib/types';
 
-const PHASE_ORDER: Exclude<Phase, 'done'>[] = ['intro', 'body', 'conclusion'];
+const PHASE_ORDER: Exclude<Phase, 'done'>[] = ['intro', 'body', 'conclusion', 'title'];
 
 function hashContent(text: string): string {
   return createHash('sha256').update(text).digest('hex').slice(0, 16);
@@ -90,24 +90,32 @@ export async function POST(
   } else if (phase === 'body') {
     const totalBody = body.bodyParagraphCount ?? 3;
     if (paragraphIdx < totalBody - 1) {
-      // 같은 phase 다음 문단으로
       nextPhase = 'body';
       nextParagraphIdx = paragraphIdx + 1;
     } else {
-      // 본론 마지막 문단 → 결론
       nextPhase = 'conclusion';
       nextParagraphIdx = 0;
     }
   } else if (phase === 'conclusion') {
+    nextPhase = 'title';
+    nextParagraphIdx = 0;
+  } else if (phase === 'title') {
     nextPhase = 'done';
     nextParagraphIdx = 0;
   }
 
-  // 4. session.current_phase 갱신
-  await db.execute({
-    sql: 'UPDATE sessions SET current_phase = ?, last_updated = ? WHERE id = ?',
-    args: [nextPhase, now(), id],
-  });
+  // 4. session.current_phase 갱신 (+ title commit이면 sessions.title도 갱신)
+  if (phase === 'title') {
+    await db.execute({
+      sql: 'UPDATE sessions SET current_phase = ?, title = ?, last_updated = ? WHERE id = ?',
+      args: [nextPhase, latest.content, now(), id],
+    });
+  } else {
+    await db.execute({
+      sql: 'UPDATE sessions SET current_phase = ?, last_updated = ? WHERE id = ?',
+      args: [nextPhase, now(), id],
+    });
+  }
 
   await touchSession(id);
 

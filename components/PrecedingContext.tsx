@@ -5,8 +5,9 @@ import { useState } from 'react';
 export interface PrecedingContextProps {
   intro?: string;
   bodyParagraphs?: string[];
-  /** 'body' | 'conclusion' */
-  currentPhase: 'body' | 'conclusion';
+  conclusion?: string;
+  /** 'body' | 'conclusion' | 'title' */
+  currentPhase: 'body' | 'conclusion' | 'title';
   /** body 페이즈에서 현재 작업 중인 문단 idx (0-based). 그 이전 문단들만 표시. */
   currentParagraphIdx?: number;
   className?: string;
@@ -15,6 +16,7 @@ export interface PrecedingContextProps {
 export default function PrecedingContext({
   intro,
   bodyParagraphs,
+  conclusion,
   currentPhase,
   currentParagraphIdx,
   className,
@@ -24,13 +26,16 @@ export default function PrecedingContext({
   // 표시할 문단들 결정
   const showIntro = !!intro?.trim();
   const showBody =
-    currentPhase === 'conclusion'
+    currentPhase === 'conclusion' || currentPhase === 'title'
       ? bodyParagraphs ?? []
       : (bodyParagraphs ?? []).filter((_, i) =>
           typeof currentParagraphIdx === 'number' ? i < currentParagraphIdx : true
         );
+  const showConclusion = currentPhase === 'title' && !!conclusion?.trim();
 
-  if (!showIntro && showBody.length === 0) return null;
+  if (!showIntro && showBody.length === 0 && !showConclusion) return null;
+
+  const totalCount = (showIntro ? 1 : 0) + showBody.length + (showConclusion ? 1 : 0);
 
   return (
     <div
@@ -42,7 +47,7 @@ export default function PrecedingContext({
         className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-sky-50/80"
       >
         <span className="font-bold text-sm text-sky-800">
-          📜 지금까지 쓴 글 ({(showIntro ? 1 : 0) + showBody.length}개 문단)
+          📜 지금까지 쓴 글 ({totalCount}개 부분)
         </span>
         <span className="text-xs text-sky-600">{expanded ? '접기 ▲' : '펼치기 ▼'}</span>
       </button>
@@ -68,6 +73,16 @@ export default function PrecedingContext({
               </p>
             </div>
           ))}
+          {showConclusion && (
+            <div>
+              <h4 className="text-xs font-bold text-sky-700 uppercase tracking-wide mb-1">
+                결론
+              </h4>
+              <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">
+                {conclusion}
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -11,10 +11,11 @@ CREATE TABLE IF NOT EXISTS sessions (
   persona_name TEXT NOT NULL,
   grade INTEGER NOT NULL,
   topic TEXT NOT NULL,
+  title TEXT,                                     -- v2.1: 학생이 commit한 글의 제목
   started_at TEXT NOT NULL,
   last_updated TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'active',          -- active | completed | abandoned
-  current_phase TEXT NOT NULL DEFAULT 'intro'     -- intro | body | conclusion | done
+  current_phase TEXT NOT NULL DEFAULT 'intro'     -- intro | body | conclusion | title | done
 );
 
 -- 모든 글쓰기 스냅샷

@@ -82,6 +82,19 @@ button:active:not(:disabled) {
   animation: wiggle 500ms ease-in-out;
 }
 
+/* 마스코트 idle 미세 흔들림 — 학생이 화면 보고 있을 때 친구가 살아있음을 표현 */
+@keyframes friendIdle {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-2px) rotate(-1.5deg); }
+  75% { transform: translateY(0) rotate(1.5deg); }
+}
+.friend-idle {
+  animation: friendIdle 4s ease-in-out infinite;
+}
+.friend-idle:hover {
+  animation: wiggle 400ms ease-in-out;
+}
+
 @keyframes slideInRight {
   from { opacity: 0; transform: translateX(20px); }
   to { opacity: 1; transform: translateX(0); }

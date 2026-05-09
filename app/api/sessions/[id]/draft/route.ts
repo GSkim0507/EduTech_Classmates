@@ -4,7 +4,7 @@ import { db, now } from '@/lib/db';
 import { getSession, findDuplicateDraft, touchSession } from '@/lib/queries';
 import type { Phase, DraftSource, DraftRequestInput } from '@/lib/types';
 
-const VALID_PHASES: Phase[] = ['intro', 'body', 'conclusion'];
+const VALID_PHASES: Phase[] = ['intro', 'body', 'conclusion', 'title'];
 const VALID_SOURCES: DraftSource[] = [
   'student_write',
   'student_revise',

@@ -220,9 +220,10 @@ export async function getClosure(sessionId: string): Promise<ClosureRow | null> 
  */
 export async function getCommittedDraftsAll(
   sessionId: string
-): Promise<{ intro: string; body: string; conclusion: string }> {
+): Promise<{ intro: string; body: string; conclusion: string; title?: string }> {
   const intro = await getCommittedDraftParagraph(sessionId, 'intro', 0);
   const conclusion = await getCommittedDraftParagraph(sessionId, 'conclusion', 0);
+  const titleCommit = await getCommittedDraftParagraph(sessionId, 'title', 0);
   const bodyParagraphs = await getCommittedBodyParagraphs(sessionId);
 
   const bodyJoined = bodyParagraphs
@@ -233,6 +234,7 @@ export async function getCommittedDraftsAll(
     intro: intro?.content ?? '',
     body: bodyJoined,
     conclusion: conclusion?.content ?? '',
+    title: titleCommit?.content ?? undefined,
   };
 }
 

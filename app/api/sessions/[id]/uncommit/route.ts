@@ -8,7 +8,7 @@ import {
 } from '@/lib/queries';
 import type { UncommitRequestInput, Phase } from '@/lib/types';
 
-const PHASE_ORDER: Exclude<Phase, 'done'>[] = ['intro', 'body', 'conclusion'];
+const PHASE_ORDER: Exclude<Phase, 'done'>[] = ['intro', 'body', 'conclusion', 'title'];
 
 function hashContent(text: string): string {
   return createHash('sha256').update(text).digest('hex').slice(0, 16);

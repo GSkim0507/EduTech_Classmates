@@ -101,6 +101,13 @@ export const CONCLUSION_SIGNAL_LABELS = {
   thesis_recall_clear: '핵심 명제 재확인',
 } as const;
 
+export const TITLE_SIGNAL_LABELS = {
+  title_present: '제목 존재',
+  title_concise: '제목 길이 적절',
+  title_relevant_to_thesis: '주장과의 관련성',
+  title_intriguing_or_assertive: '제목의 매력',
+} as const;
+
 export function getCurriculumSignalLabel(phase: Phase, key: string): string {
   if (phase === 'intro') {
     return (INTRO_SIGNAL_LABELS as Record<string, string>)[key] ?? key;
@@ -110,6 +117,9 @@ export function getCurriculumSignalLabel(phase: Phase, key: string): string {
   }
   if (phase === 'conclusion') {
     return (CONCLUSION_SIGNAL_LABELS as Record<string, string>)[key] ?? key;
+  }
+  if (phase === 'title') {
+    return (TITLE_SIGNAL_LABELS as Record<string, string>)[key] ?? key;
   }
   return key;
 }

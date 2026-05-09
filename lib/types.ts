@@ -3,7 +3,7 @@
 // spec: docs/superpowers/specs/2026-05-09-system-redesign-design.md §3
 // ──────────────────────────────────────────────────────────
 
-export type Phase = 'intro' | 'body' | 'conclusion' | 'done';
+export type Phase = 'intro' | 'body' | 'conclusion' | 'title' | 'done';
 export type Tone = 'less-annoying' | 'annoying';
 export type Domain = 'idea' | 'writing';
 export type ClosureType = 'full' | 'partial' | 'impasse';
@@ -29,6 +29,7 @@ export interface SessionRow {
   persona_name: string;
   grade: number;
   topic: string;
+  title: string | null;
   started_at: string;
   last_updated: string;
   status: SessionStatus;
@@ -142,15 +143,25 @@ export interface ConclusionCurriculumSignals {
   thesis_recall_clear: boolean;
 }
 
+export interface TitleCurriculumSignals {
+  phase: 'title';
+  title_present: boolean;
+  title_concise: boolean;                      // 10~25자 권장
+  title_relevant_to_thesis: number;            // 0~1
+  title_intriguing_or_assertive: boolean;      // 주장형 또는 궁금증 유발
+}
+
 export type CurriculumSignals =
   | IntroCurriculumSignals
   | BodyCurriculumSignals
-  | ConclusionCurriculumSignals;
+  | ConclusionCurriculumSignals
+  | TitleCurriculumSignals;
 
 // 직전 글 컨텍스트 (LLM 평가/응답 시 함께 전달)
 export interface PrecedingContent {
   intro?: string;                       // 서론 commit
   bodyParagraphs?: string[];            // 본론 1..i-1 commit (현재 본론 i 평가 시)
+  conclusion?: string;                  // 결론 commit (title phase에서 제공)
 }
 
 // Closure 근거
