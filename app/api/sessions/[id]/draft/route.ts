@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createHash } from 'node:crypto';
 import { db, now } from '@/lib/db';
 import { getSession, findDuplicateDraft, touchSession } from '@/lib/queries';
+import { appendJournalEvent } from '@/lib/sessionJournal';
 import type { Phase, DraftSource, DraftRequestInput } from '@/lib/types';
 
 const VALID_PHASES: Phase[] = ['intro', 'body', 'conclusion', 'title'];
@@ -54,6 +55,7 @@ export async function POST(
     return NextResponse.json({ draftId: dup.id, deduped: true });
   }
 
+  const ts = now();
   const result = await db.execute({
     sql: `INSERT INTO draft_revisions
             (session_id, phase, paragraph_idx, content, content_hash, source, preceding_turn_id, timestamp)
@@ -66,10 +68,24 @@ export async function POST(
       contentHash,
       body.source,
       body.precedingTurnId ?? null,
-      now(),
+      ts,
     ],
   });
 
+  const draftId = Number(result.lastInsertRowid);
+
+  // JSON 저널 미러 — 학생이 액션 버튼을 눌러 flushAutosave가 호출된 시점에만 도달
+  await appendJournalEvent(id, {
+    type: 'draft_saved',
+    timestamp: ts,
+    draftId,
+    phase: body.phase,
+    paragraphIdx,
+    source: body.source,
+    content,
+    contentHash,
+  });
+
   await touchSession(id);
-  return NextResponse.json({ draftId: Number(result.lastInsertRowid), deduped: false });
+  return NextResponse.json({ draftId, deduped: false });
 }

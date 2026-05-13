@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Annoying Friend — 이용 안내서</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap" />
+<style>
+  :root {
+    --bg: #fffbf0;
+    --panel: #ffffff;
+    --ink: #2a241b;
+    --ink-soft: #6b5f50;
+    --line: #f0e2c4;
+    --accent: #b06b00;
+    --accent-soft: #fef2d4;
+    --good: #2e7d32;
+    --warn: #c0392b;
+    --info: #1565c0;
+    --shadow: 0 2px 8px rgba(120, 80, 0, 0.06);
+    --font-body: 'Gowun Dodum', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+    --font-display: 'Jua', 'Gowun Dodum', sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: var(--font-body);
+    background: var(--bg);
+    color: var(--ink);
+    margin: 0;
+    line-height: 1.75;
+    font-size: 16px;
+  }
+
+  .wrap {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 48px 28px 96px;
+  }
+
+  /* ─── Header ─── */
+  header.cover {
+    background: linear-gradient(135deg, #fff4d6 0%, #ffe4b8 100%);
+    border-radius: 18px;
+    padding: 36px 32px;
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow);
+    margin-bottom: 32px;
+  }
+  header.cover .eyebrow {
+    color: var(--accent);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    font-size: 13px;
+    text-transform: uppercase;
+  }
+  header.cover h1 {
+    font-family: var(--font-display);
+    font-size: 40px;
+    margin: 12px 0 6px;
+    color: #6b3f00;
+    letter-spacing: -0.5px;
+  }
+  header.cover .sub {
+    color: var(--ink-soft);
+    font-size: 17px;
+  }
+  header.cover .meta {
+    margin-top: 20px;
+    font-size: 13px;
+    color: var(--ink-soft);
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+  header.cover .meta span strong { color: var(--accent); }
+
+  /* ─── TOC ─── */
+  nav.toc {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 20px 24px;
+    margin-bottom: 36px;
+    box-shadow: var(--shadow);
+  }
+  nav.toc h2 {
+    font-size: 14px;
+    color: var(--accent);
+    letter-spacing: 0.06em;
+    margin: 0 0 12px;
+    text-transform: uppercase;
+  }
+  nav.toc ol {
+    margin: 0;
+    padding-left: 22px;
+    columns: 2;
+    column-gap: 28px;
+  }
+  nav.toc ol li { margin-bottom: 6px; break-inside: avoid; }
+  nav.toc a { color: var(--ink); text-decoration: none; border-bottom: 1px dotted var(--line); }
+  nav.toc a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ─── Section ─── */
+  section {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 28px 30px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow);
+  }
+  section h2 {
+    font-family: var(--font-display);
+    font-size: 24px;
+    margin: 0 0 14px;
+    color: #6b3f00;
+    border-bottom: 2px solid var(--accent-soft);
+    padding-bottom: 8px;
+  }
+  section h3 {
+    font-size: 17px;
+    margin: 22px 0 8px;
+    color: var(--accent);
+  }
+  section p { margin: 0 0 12px; }
+  section ul, section ol { padding-left: 22px; margin: 0 0 14px; }
+  section li { margin-bottom: 6px; }
+  section strong { color: var(--ink); }
+
+  /* ─── Boxes / callouts ─── */
+  .callout {
+    border-left: 4px solid var(--accent);
+    background: var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 8px;
+    margin: 14px 0;
+    font-size: 15px;
+  }
+  .callout.good { border-color: var(--good); background: #e8f5e9; }
+  .callout.warn { border-color: var(--warn); background: #fdecea; }
+  .callout.info { border-color: var(--info); background: #e3f2fd; }
+  .callout strong { display: block; margin-bottom: 4px; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; }
+  .callout.good strong { color: var(--good); }
+  .callout.warn strong { color: var(--warn); }
+  .callout.info strong { color: var(--info); }
+
+  /* ─── Value cards ─── */
+  .value-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin: 14px 0 6px;
+  }
+  .value-card {
+    background: #fffdf6;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px 16px 14px;
+    text-align: center;
+  }
+  .value-card .icon { font-size: 30px; display: block; margin-bottom: 6px; }
+  .value-card h4 {
+    margin: 0 0 6px;
+    font-family: var(--font-display);
+    color: var(--accent);
+    font-size: 16px;
+  }
+  .value-card p { font-size: 14px; color: var(--ink-soft); margin: 0; line-height: 1.55; }
+
+  /* ─── Phase flow diagram ─── */
+  .flow {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin: 18px 0 8px;
+    justify-content: center;
+  }
+  .flow .step {
+    background: var(--panel);
+    border: 2px solid var(--accent-soft);
+    border-radius: 12px;
+    padding: 14px 18px;
+    text-align: center;
+    min-width: 100px;
+  }
+  .flow .step .emoji { font-size: 26px; display: block; margin-bottom: 4px; }
+  .flow .step .label { font-weight: 700; color: var(--accent); }
+  .flow .step .meta { font-size: 12px; color: var(--ink-soft); }
+  .flow .arrow { color: var(--accent); font-size: 22px; font-weight: 700; }
+
+  /* ─── Button mockups ─── */
+  .btn-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    margin: 14px 0;
+  }
+  .btn-card {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px 18px;
+    background: #fffdf6;
+  }
+  .btn-card .btn-demo {
+    display: inline-block;
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    font-size: 14px;
+  }
+  .btn-card .btn-help { background: #fef2d4; color: #6b3f00; border: 2px solid #f0c761; }
+  .btn-card .btn-submit { background: #e8f5e9; color: #1b5e20; border: 2px solid #81c784; }
+  .btn-card .btn-show { background: #e3f2fd; color: #0d47a1; border: 2px solid #64b5f6; }
+  .btn-card .btn-next { background: #f3e5f5; color: #4a148c; border: 2px solid #ba68c8; }
+  .btn-card h4 { margin: 0 0 6px; font-size: 15px; }
+  .btn-card .desc { font-size: 14.5px; color: var(--ink-soft); margin: 0 0 8px; }
+  .btn-card .when { font-size: 13px; }
+  .btn-card .when b { color: var(--accent); }
+
+  /* ─── Friend face / gauge mockups ─── */
+  .face-row {
+    display: flex;
+    gap: 18px;
+    justify-content: center;
+    margin: 18px 0 6px;
+    flex-wrap: wrap;
+  }
+  .face {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px 18px;
+    text-align: center;
+    min-width: 220px;
+  }
+  .face .svg-wrap { width: 90px; height: 90px; margin: 0 auto; }
+  .face .name {
+    font-weight: 700;
+    margin-top: 6px;
+    font-family: var(--font-display);
+    font-size: 17px;
+    color: var(--accent);
+  }
+  .face .when {
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    margin-top: 2px;
+  }
+  .face .quote { font-size: 13.5px; color: var(--ink); margin-top: 10px; font-style: italic; }
+
+  .gauge {
+    margin: 14px auto 6px;
+    max-width: 440px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px 16px;
+  }
+  .gauge .bar {
+    position: relative;
+    height: 14px;
+    border-radius: 7px;
+    background: #ffe6e0;
+    overflow: hidden;
+  }
+  .gauge .fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    background: linear-gradient(90deg, #74c69d, #2d6a4f);
+    border-radius: 7px;
+  }
+  .gauge .labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-size: 12.5px;
+    color: var(--ink-soft);
+  }
+  .gauge .labels b { color: var(--ink); }
+
+  /* ─── Storage cards ─── */
+  .save-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin: 14px 0;
+  }
+  .save-card {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px 18px;
+    background: #fffdf6;
+  }
+  .save-card .badge {
+    display: inline-block;
+    font-size: 11.5px;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+    background: var(--accent-soft);
+    padding: 2px 8px;
+    border-radius: 999px;
+    margin-bottom: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .save-card h4 {
+    margin: 0 0 6px;
+    font-size: 15px;
+  }
+  .save-card p { font-size: 13.5px; color: var(--ink-soft); margin: 0; line-height: 1.55; }
+
+  /* ─── FAQ ─── */
+  .faq details {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 16px;
+    margin-bottom: 10px;
+    background: #fffdf6;
+  }
+  .faq details[open] { background: var(--accent-soft); }
+  .faq summary {
+    cursor: pointer;
+    font-weight: 700;
+    color: var(--ink);
+    font-size: 15px;
+    padding: 4px 0;
+  }
+  .faq details[open] summary { color: var(--accent); }
+  .faq .answer {
+    padding: 8px 0 4px;
+    font-size: 14.5px;
+    color: var(--ink-soft);
+    line-height: 1.7;
+  }
+
+  footer {
+    margin-top: 36px;
+    text-align: center;
+    color: var(--ink-soft);
+    font-size: 13px;
+  }
+
+  @media (max-width: 720px) {
+    .wrap { padding: 28px 16px; }
+    nav.toc ol { columns: 1; }
+    .btn-grid { grid-template-columns: 1fr; }
+    .save-grid { grid-template-columns: 1fr; }
+    .value-grid { grid-template-columns: 1fr; }
+    header.cover h1 { font-size: 30px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<header class="cover">
+  <div class="eyebrow">User Guide · 2026-05-13</div>
+  <h1>The Annoying Friend 이용 안내서</h1>
+  <div class="sub">한국 초등학교 4–6학년 학생이 깐깐한 AI 친구와 함께 주장하는 글을 쓰는 학습 도구</div>
+  <div class="meta">
+    <span>대상 <strong>학생 · 교사 · 학습 관계자</strong></span>
+    <span>학습 영역 <strong>주장 글쓰기 · 메타인지 · 비판적 사고</strong></span>
+  </div>
+</header>
+
+<nav class="toc">
+  <h2>목차</h2>
+  <ol>
+    <li><a href="#why">1. 이 도구가 다른 점</a></li>
+    <li><a href="#start">2. 사용 흐름 한눈에 보기</a></li>
+    <li><a href="#phase">3. 4단계 글쓰기</a></li>
+    <li><a href="#buttons">4. 학생이 누르는 4가지 버튼</a></li>
+    <li><a href="#persona">5. 친구의 두 가지 모습</a></li>
+    <li><a href="#body">6. 본론은 3~5문단까지</a></li>
+    <li><a href="#regress">7. 돌아가서 다시 쓰기</a></li>
+    <li><a href="#save">8. 학생 글의 안전한 보관</a></li>
+    <li><a href="#admin">9. 교사·관리자 페이지</a></li>
+    <li><a href="#faq">10. 자주 묻는 질문</a></li>
+  </ol>
+</nav>
+
+<!-- ─────────────────────────────────────────── -->
+<section id="why">
+  <h2>1. 이 도구가 다른 점</h2>
+  <p>대부분의 AI 학습 도구는 "잘했어요" 또는 "다시 해보세요"라고 평가합니다. <strong>The Annoying Friend</strong>는 다릅니다. 학생 옆에 <em>깐깐한 친구</em>가 앉아 있다고 상상해 보세요. 학생이 잘 못 쓰면 친구가 살짝 잘난 척하고, 학생이 잘 쓰면 친구가 약 올라합니다. 학생은 평가를 받는 것이 아니라 <strong>친구를 약 올리려고</strong> 글을 다듬게 됩니다.</p>
+
+  <div class="value-grid">
+    <div class="value-card">
+      <span class="icon">🎮</span>
+      <h4>게임 같은 동기</h4>
+      <p>"친구를 약 올리는" 게임으로 글쓰기가 즐거워집니다.</p>
+    </div>
+    <div class="value-card">
+      <span class="icon">📚</span>
+      <h4>글쓰기 규칙 기반</h4>
+      <p>한국 초등 국어과의 주장 글쓰기 규칙을 그대로 평가에 반영합니다.</p>
+    </div>
+    <div class="value-card">
+      <span class="icon">🪞</span>
+      <h4>메타인지 강화</h4>
+      <p>학생이 직접 도움을 청하고, 다시 쓰기 결정도 학생이 합니다.</p>
+    </div>
+  </div>
+
+  <h3>학생이 얻는 것</h3>
+  <ul>
+    <li>한 편의 완성된 주장 글 (서론·본론·결론·제목 포함)</li>
+    <li>친구의 반응을 보며 스스로 개선해 본 경험</li>
+    <li>친구의 마지막 평가 — 어느 부분이 좋았고, 어디가 아쉬웠는지</li>
+  </ul>
+
+  <h3>교사·학부모가 얻는 것</h3>
+  <ul>
+    <li>학생이 어떤 순서로 글을 다듬었는지 그 여정 전체를 확인 가능</li>
+    <li>학생이 도움을 몇 번 청했고, 평가를 몇 번 받았는지에 대한 기록</li>
+    <li>관리자 페이지에서 세션 단위로 글쓰기 흔적을 시각적으로 검토</li>
+  </ul>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<section id="start">
+  <h2>2. 사용 흐름 한눈에 보기</h2>
+
+  <ol>
+    <li><strong>입장</strong> — 첫 화면에서 학생 이름(닉네임 가능), 학년, 글 주제를 입력합니다.</li>
+    <li><strong>글쓰기</strong> — 4단계(서론 → 본론 → 결론 → 제목)를 순서대로 작성합니다. 각 단계마다 친구에게 도움을 청하거나 평가를 받을 수 있습니다.</li>
+    <li><strong>마무리</strong> — 모든 단계를 끝내면 친구가 마지막 평가를 줍니다. 학생은 완성된 글과 친구의 평가를 함께 받습니다.</li>
+  </ol>
+
+  <div class="callout info">
+    <strong>한 세션 소요 시간</strong>
+    학생 수준과 주제 깊이에 따라 다르지만 <strong>30~60분</strong>이 일반적입니다. 도중에 잠시 멈췄다가 같은 기기·같은 브라우저로 돌아오면 진행 중인 단계부터 이어 쓸 수 있습니다.
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<section id="phase">
+  <h2>3. 4단계 글쓰기</h2>
+
+  <p>학생은 글을 다음 네 단계로 나누어 차례차례 작성합니다.</p>
+
+  <div class="flow">
+    <div class="step">
+      <span class="emoji">📝</span>
+      <span class="label">서론</span>
+      <span class="meta">주장 한 문장</span>
+    </div>
+    <span class="arrow">→</span>
+    <div class="step">
+      <span class="emoji">📑</span>
+      <span class="label">본론</span>
+      <span class="meta">근거 3~5문단</span>
+    </div>
+    <span class="arrow">→</span>
+    <div class="step">
+      <span class="emoji">🏁</span>
+      <span class="label">결론</span>
+      <span class="meta">요약·강조</span>
+    </div>
+    <span class="arrow">→</span>
+    <div class="step">
+      <span class="emoji">🏷️</span>
+      <span class="label">제목</span>
+      <span class="meta">한 줄로</span>
+    </div>
+    <span class="arrow">→</span>
+    <div class="step">
+      <span class="emoji">🎉</span>
+      <span class="label">완료</span>
+      <span class="meta">친구 평가</span>
+    </div>
+  </div>
+
+  <p>각 단계에서 학생은 ① 글을 쓰고 ② 필요하면 친구에게 <strong>같이 고민해줘</strong>로 도움을 청하고 ③ <strong>친구한테 보여주기</strong>로 평가를 받고 ④ <strong>다음으로</strong> 버튼을 눌러 그 단계를 마무리합니다.</p>
+
+  <p>화면 위쪽 단계 표시줄을 누르면 이미 끝난 단계를 다시 살펴보거나 고쳐 쓸 수 있습니다. 아직 도달하지 않은 단계는 비활성 상태로 표시됩니다.</p>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<section id="buttons">
+  <h2>4. 학생이 누르는 4가지 버튼</h2>
+  <p>학생이 화면에서 누를 수 있는 버튼은 단계마다 다음 네 가지로 통일됩니다. 자유로운 채팅창은 없습니다. 학생의 모든 상호작용은 이 네 버튼을 거치도록 의도적으로 설계됐습니다.</p>
+
+  <div class="btn-grid">
+    <div class="btn-card">
+      <span class="btn-demo btn-help">🤝 같이 고민해줘</span>
+      <h4>도움 요청 — 학생이 직접 청함</h4>
+      <p class="desc">막혔을 때 친구의 도움을 부르는 버튼입니다. <em>평가가 아니라 도움</em>이라는 점이 핵심입니다.</p>
+      <p class="when"><b>제한</b> 단계마다(본론은 문단마다) <strong>2회</strong>까지 사용 가능<br/>
+        <b>선택지</b> "💡 아이디어가 안 떠올라" / "✏️ 글의 짜임이 헷갈려" / "🤷 그냥 전부 봐줘"</p>
+    </div>
+    <div class="btn-card">
+      <span class="btn-demo btn-submit">🎯 친구한테 보여주기</span>
+      <h4>평가 요청 — 친구가 자동 평가</h4>
+      <p class="desc">"이 정도면 친구가 인정해줄까?" 싶을 때 누릅니다. 친구는 글쓰기 규칙에 따라 평가하고, 그 결과로 친구의 다음 반응(잘난 척 vs 약오름) 모드가 결정됩니다.</p>
+      <p class="when"><b>제한</b> 무제한</p>
+    </div>
+    <div class="btn-card">
+      <span class="btn-demo btn-show">👀 본론 문단별 보여주기</span>
+      <h4>본론은 문단마다 따로 평가</h4>
+      <p class="desc">본론이 여러 문단이라면 한 번에 전체를 평가받지 않고 문단마다 따로 친구의 반응을 들을 수 있습니다.</p>
+      <p class="when"><b>사용 위치</b> 본론 단계 안에서만 표시됩니다.</p>
+    </div>
+    <div class="btn-card">
+      <span class="btn-demo btn-next">➡️ 다음으로</span>
+      <h4>현재 단계 확정 + 다음 단계로 진입</h4>
+      <p class="desc">이 단계의 글을 더 손보지 않겠다는 의미입니다. 누른 순간 단계가 잠기고 다음 단계로 넘어갑니다.</p>
+      <p class="when"><b>본론에서는</b> 최소 1문단 작성 시 누를 수 있고, 정석은 3문단입니다.</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>설계 의도</strong>
+    채팅창을 없애고 4개의 명확한 버튼만 둔 것은 학생이 <em>"내가 지금 무엇을 하고 있는가"</em>를 늘 의식하게 하기 위함입니다. 도움을 청하는 행위, 평가를 받는 행위, 확정하는 행위가 각각 또렷하게 구분되어 메타인지 학습 효과를 높입니다.
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<section id="persona">
+  <h2>5. 친구의 두 가지 모습</h2>
+
+  <p>친구는 학생을 라이벌로 봅니다. 학생이 잘 쓰면 약 올라하고, 못 쓰면 잘난 척합니다. 이 두 모습은 친구의 표정과 말투로 학생에게 그대로 전달됩니다.</p>
+
+  <div class="face-row">
+    <div class="face">
+      <div class="svg-wrap">
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="50" r="45" fill="#fef2d4" stroke="#f0c761" stroke-width="3"/>
+          <circle cx="28" cy="62" r="7" fill="#f8c4cf" opacity="0.7"/>
+          <circle cx="72" cy="62" r="7" fill="#f8c4cf" opacity="0.7"/>
+          <line x1="30" y1="42" x2="40" y2="42" stroke="#2a241b" stroke-width="3" stroke-linecap="round"/>
+          <circle cx="65" cy="42" r="3" fill="#2a241b"/>
+          <path d="M 38 70 Q 50 76 62 66" stroke="#2a241b" stroke-width="3" fill="none" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="name">잘난 척 모드</div>
+      <div class="when">학생이 아직 미흡할 때</div>
+      <div class="quote">"에이~ 그것도 모르겠어? 천천히 같이 해보자."</div>
+    </div>
+    <div class="face">
+      <div class="svg-wrap">
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="50" r="45" fill="#fdecea" stroke="#e74c3c" stroke-width="3"/>
+          <circle cx="28" cy="62" r="7" fill="#e74c3c" opacity="0.55"/>
+          <circle cx="72" cy="62" r="7" fill="#e74c3c" opacity="0.55"/>
+          <path d="M 26 32 L 38 38 L 30 42" stroke="#2a241b" stroke-width="3" fill="none" stroke-linecap="round"/>
+          <path d="M 74 32 L 62 38 L 70 42" stroke="#2a241b" stroke-width="3" fill="none" stroke-linecap="round"/>
+          <circle cx="36" cy="46" r="3" fill="#2a241b"/>
+          <circle cx="64" cy="46" r="3" fill="#2a241b"/>
+          <path d="M 38 72 Q 50 64 62 72" stroke="#2a241b" stroke-width="3" fill="none" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="name">약오름 모드</div>
+      <div class="when">학생이 잘 썼을 때</div>
+      <div class="quote">"헐... 좋네. 근데 이건 어때? 인정 못 해 아직."</div>
+    </div>
+  </div>
+
+  <h3>승부 게이지</h3>
+  <p>친구 표정 아래 좁은 게이지가 표시됩니다. 학생이 잘 쓸수록 좌측(학생 영역)이 길어지고 우측(친구 영역)은 빨갛게 변합니다. <em>친구가 약 오른 정도</em>를 한눈에 보여주는 시각 신호입니다.</p>
+
+  <div class="gauge">
+    <div class="bar"><div class="fill" style="width: 72%;"></div></div>
+    <div class="labels"><b>학생 72</b> <span>:</span> <b>친구 28</b></div>
+  </div>
+
+  <p style="font-size: 13.5px; color: var(--ink-soft); margin-top: 6px;">아직 평가를 한 번도 받지 않은 시작 시점에는 50:50으로 표시됩니다. 평가가 일어날 때마다 새로 계산되며, 시간 흐름은 따로 표시되지 않고 <em>현재 상태만</em> 보입니다.</p>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<section id="body">
+  <h2>6. 본론은 3~5문단까지</h2>
+  <p>본론 단계에 들어가면 기본 3개의 글쓰기 칸이 위에서 아래로 나란히 표시됩니다. 학생은 글의 분량에 따라 칸을 늘리거나 줄일 수 있습니다.</p>
+
+  <ul>
+    <li><strong>문단 추가</strong> — 마지막 칸 아래 <em>+</em> 버튼으로 5번째 문단까지 늘릴 수 있습니다.</li>
+    <li><strong>문단 삭제</strong> — 각 칸 우측 상단 <em>−</em> 버튼으로 줄일 수 있습니다. 단, 본론은 최소 3개 칸이 유지됩니다.</li>
+    <li><strong>문단별 평가</strong> — 각 문단마다 도움 요청·평가 요청 버튼이 따로 있어, 부분적으로 친구의 반응을 들을 수 있습니다.</li>
+  </ul>
+
+  <div class="callout">
+    <strong>본론을 짧게 끝낼 때</strong>
+    학생이 본론을 한두 문단만 쓰고 결론으로 넘어가면, 친구는 다음 평가에서 <em>"본론이 너무 짧다"</em>는 신호를 받아 한 번 더 짚어줍니다. 결론에 도달하지 못하게 막지는 않으며, 학생의 선택을 존중하면서도 친구는 깐깐하게 반응합니다.
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<section id="regress">
+  <h2>7. 돌아가서 다시 쓰기</h2>
+  <p>이미 확정한 단계를 다시 고쳐 쓸 수 있습니다. 화면 상단의 단계 표시줄에서 끝난 단계를 누르면 두 가지 중에서 선택하는 화면이 나옵니다.</p>
+
+  <ul>
+    <li><strong>그냥 보기만</strong> — 그 단계에 학생이 쓴 글을 펼쳐서 다시 읽기만 합니다. 수정 불가.</li>
+    <li><strong>다시 쓰기</strong> — 확인 후 그 단계의 확정을 풀고 글쓰기 칸으로 되돌아갑니다.</li>
+  </ul>
+
+  <div class="callout good">
+    <strong>학습 가치</strong>
+    돌아가서 다시 쓰는 활동은 학생의 메타인지(자기 글을 객관적으로 보는 능력)를 단단하게 합니다. 이 도구는 학생이 마음을 바꿔 돌아가는 행동을 <em>실패가 아니라 성숙의 흔적으로</em> 기록합니다. 교사 페이지에서 회귀 흔적을 따로 확인할 수 있습니다.
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<section id="save">
+  <h2>8. 학생 글의 안전한 보관</h2>
+
+  <p>학생이 쓰는 글은 세 가지 단계로 점차 안전하게 보관됩니다.</p>
+
+  <div class="save-grid">
+    <div class="save-card">
+      <span class="badge">1단계</span>
+      <h4>잠시 임시 보관</h4>
+      <p>학생이 글자를 입력하는 동안에는 학생 자신의 브라우저에만 잠시 머뭅니다. 다른 누구의 컴퓨터로도 보내지지 않고, 브라우저 탭을 닫으면 자동으로 사라집니다.</p>
+    </div>
+    <div class="save-card">
+      <span class="badge">2단계</span>
+      <h4>정식 기록</h4>
+      <p>학생이 4가지 버튼(같이 고민 / 친구 설득 / 본론 보여주기 / 다음으로) 중 하나를 누른 순간에만 그 시점의 글이 정식 기록으로 보관됩니다. 단순한 키 입력만으로는 절대 기록되지 않습니다.</p>
+    </div>
+    <div class="save-card">
+      <span class="badge">3단계</span>
+      <h4>교사용 분석 사본</h4>
+      <p>같은 시점에 교사·연구자가 나중에 살펴볼 수 있도록 사람이 읽을 수 있는 형식의 사본이 함께 보관됩니다. 학생 사용 환경과는 분리된 서버 영역에 저장됩니다.</p>
+    </div>
+  </div>
+
+  <div class="callout info">
+    <strong>왜 이렇게 나눠 두었나요?</strong>
+    학생이 글을 다듬는 모든 글자 입력을 다 기록해 두면 분석할 때 노이즈가 너무 많아 의미를 읽기 어렵습니다. <em>학생이 의식적으로 버튼을 누른 순간</em>만 영구 기록함으로써, 학생의 학습 여정에서 진짜로 의미 있는 순간만 깨끗하게 남깁니다.
+  </div>
+
+  <h3>개인정보 측면</h3>
+  <ul>
+    <li>학생 이름은 닉네임 사용을 권장합니다.</li>
+    <li>현재 단계에서는 회원가입·로그인 절차 없이 즉시 사용 가능한 형태입니다. 정식 학교 도입 단계에서는 회원 인증 시스템을 추가할 예정입니다.</li>
+    <li>학생이 쓴 글은 시스템 운영자(학교·연구진)만 관리자 페이지를 통해 열람할 수 있습니다.</li>
+  </ul>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<section id="admin">
+  <h2>9. 교사·관리자 페이지</h2>
+
+  <p>교사 또는 연구자는 별도의 관리자 페이지에서 학생들의 글쓰기 여정 전체를 살펴볼 수 있습니다.</p>
+
+  <h3>접속 방법</h3>
+  <ol>
+    <li>관리자 로그인 페이지에 접속</li>
+    <li>운영자에게 발급받은 비밀번호 입력</li>
+    <li>관리자 메인 화면에서 전체 학생 세션 목록 확인</li>
+  </ol>
+
+  <h3>관리자 페이지에서 볼 수 있는 것</h3>
+  <ul>
+    <li><strong>세션 목록</strong> — 학생 이름, 주제, 진행 중인 단계, 마지막 갱신 시각</li>
+    <li><strong>세션 상세 / 글쓰기 여정</strong> — 학생이 시간 순서대로 어떻게 글을 다듬었는지, 친구에게 몇 번 도움을 청했는지, 평가를 몇 번 받았는지 시각적으로 표시됩니다.</li>
+    <li><strong>변경 비교</strong> — 학생이 친구의 피드백을 받은 뒤 글을 어떻게 고쳤는지 <em>이전 / 이후</em>를 색깔로 표시(추가된 부분은 초록, 지운 부분은 빨강).</li>
+    <li><strong>데이터 내보내기</strong> — 한 세션 또는 전체 세션을 엑셀에서 열 수 있는 표 형식으로 받기.</li>
+  </ul>
+
+  <div class="callout warn">
+    <strong>현재 단계의 인증</strong>
+    관리자 페이지는 비밀번호로 보호되지만, 학생 페이지는 누구나 접속하면 새 세션을 시작할 수 있습니다. 정식 학교 배포 단계에서는 학생도 로그인이 필요한 형태로 확장될 예정입니다.
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<section id="faq">
+  <h2>10. 자주 묻는 질문</h2>
+  <div class="faq">
+    <details>
+      <summary>학생이 글을 쓰다가 잠시 멈췄다 다시 와도 이어 쓸 수 있나요?</summary>
+      <div class="answer">
+        같은 기기, 같은 브라우저로 같은 세션 주소에 다시 접속하면 마지막으로 친구에게 보여주기 / 도움 청하기 / 다음으로를 누른 시점까지의 글이 그대로 복원됩니다. 그 사이에 추가로 친 키 입력은 브라우저 탭을 닫으면 사라지므로, 중요한 변경 후에는 액션 버튼 중 하나를 눌러 두는 것을 권장합니다.
+      </div>
+    </details>
+    <details>
+      <summary>학생이 자유롭게 친구와 대화할 수 있는 채팅창은 왜 없나요?</summary>
+      <div class="answer">
+        의도적으로 제거했습니다. 학생이 글에 집중하지 않고 친구와 잡담만 나누는 행동을 막고, 학생의 모든 상호작용이 <em>도움 요청 / 평가 요청 / 단계 확정</em> 중 하나로 또렷하게 구분되도록 했습니다. 이것은 메타인지 학습 효과를 높이는 핵심 설계 결정입니다.
+      </div>
+    </details>
+    <details>
+      <summary>친구가 학생에게 너무 깐깐하면 학생이 상처받지 않을까요?</summary>
+      <div class="answer">
+        친구는 <strong>잘난 척 모드</strong>에서는 깐깐하기보다 살짝 으스대며 친절하게 도와주는 어조를 사용합니다. <strong>약오름 모드</strong>는 학생이 잘 썼을 때만 나오는 것이라 오히려 칭찬에 가깝습니다. 둘 다 <em>친구로서의 친근함 + 반말</em>이라는 공통 어조를 지킵니다. 학생이 좌절감을 느끼는 어조는 사용하지 않도록 응답 가이드가 명시되어 있습니다.
+      </div>
+    </details>
+    <details>
+      <summary>친구의 평가는 어떤 기준으로 이뤄지나요?</summary>
+      <div class="answer">
+        한국 초등 국어과의 주장 글쓰기 규칙(서론 / 본론 / 결론별 평가 항목)을 기준으로 다섯 가지 평가 요소(주장의 명확성, 근거의 적절성, 근거의 관련성, 표현의 적절성, 짜임의 완성도)와 단계별 세부 신호를 함께 봅니다. 학생에게는 점수나 규칙 번호로 말하지 않고, 자연스러운 또래의 말투로 전달됩니다.
+      </div>
+    </details>
+    <details>
+      <summary>본론을 꼭 3문단 이상 써야 하나요?</summary>
+      <div class="answer">
+        시스템적으로는 한 문단만 써도 다음 단계로 넘어갈 수 있도록 열어두었습니다. 다만 친구는 다음 평가에서 <em>"본론이 너무 짧다"</em>는 신호를 한 번 더 짚어줍니다. 학생의 선택을 막지는 않지만, 글쓰기 규칙에 따른 깐깐한 반응은 유지됩니다.
+      </div>
+    </details>
+    <details>
+      <summary>학생이 쓴 글이 어디에 보관되며 누가 볼 수 있나요?</summary>
+      <div class="answer">
+        학생이 4가지 액션 버튼 중 하나를 누른 순간의 글만 시스템 서버에 기록됩니다. 그 외의 키 입력은 학생 본인의 브라우저에만 잠시 머무르고 탭을 닫으면 사라집니다. 기록된 글은 시스템 운영자(학교·연구진)가 관리자 페이지를 통해서만 열람할 수 있습니다.
+      </div>
+    </details>
+    <details>
+      <summary>학생 한 명이 글 한 편을 쓰는 데 얼마나 걸리나요?</summary>
+      <div class="answer">
+        학년·주제·학생 수준에 따라 다르지만 일반적으로 <strong>30~60분</strong>입니다. 한 차시 수업 안에서 마무리할 수도 있고, 1~2일에 걸쳐 나누어 쓸 수도 있습니다(같은 기기에서 이어 쓰는 한).
+      </div>
+    </details>
+    <details>
+      <summary>여러 학생이 동시에 사용할 수 있나요?</summary>
+      <div class="answer">
+        가능합니다. 각 학생은 자기만의 세션을 가지며, 다른 학생의 글과는 분리되어 있습니다. 학교 단위 동시 접속 규모는 시스템 운영자에게 사전 안내된 사양 범위 내에서 보장됩니다.
+      </div>
+    </details>
+  </div>
+</section>
+
+<footer>
+  <p>The Annoying Friend — 이용 안내서 · 2026-05-13<br/>
+  학교 도입·연구 협업 문의는 운영자에게 직접 연락해 주세요.</p>
+</footer>
+
+</div>
+
+</body>
+</html>

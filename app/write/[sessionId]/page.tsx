@@ -28,6 +28,39 @@ const API_KEY_STORAGE = 'annoying-classmate:api-key';
 const TUTORIAL_SHOWN_KEY = 'annoying-classmate:tutorial-shown';
 const HELP_PER_CONTEXT = 2; // 문단별·페이즈별 "같이 고민" 카드 2장
 
+// sessionStorage 임시 저장 키 — 학생이 액션 버튼을 누르기 전 keystroke만 보관.
+// 탭 종료 시 브라우저가 자동 삭제. DB에는 액션 시점에만 반영된다.
+const SS_DRAFT_PREFIX = 'annoying-classmate:draft';
+
+function draftStorageKey(sessionId: string, phase: string, paragraphIdx: number): string {
+  return `${SS_DRAFT_PREFIX}:${sessionId}:${phase}:${paragraphIdx}`;
+}
+
+function readLocalDraft(sessionId: string, phase: string, paragraphIdx: number): string | null {
+  try {
+    const raw = sessionStorage.getItem(draftStorageKey(sessionId, phase, paragraphIdx));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { content?: unknown };
+    return typeof parsed.content === 'string' ? parsed.content : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearAllLocalDrafts(sessionId: string): void {
+  try {
+    const prefix = `${SS_DRAFT_PREFIX}:${sessionId}:`;
+    const toRemove: string[] = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const k = sessionStorage.key(i);
+      if (k && k.startsWith(prefix)) toRemove.push(k);
+    }
+    toRemove.forEach((k) => sessionStorage.removeItem(k));
+  } catch {
+    // ignore
+  }
+}
+
 const PHASE_LABEL: Record<Exclude<Phase, 'done'>, string> = {
   intro: '서론',
   body: '본론',
@@ -151,17 +184,20 @@ export default function WritePage({
       const drafts = data.drafts as DraftRow[];
       const commits = (data.phase_commits ?? []) as PhaseParagraphCommitRow[];
 
-      // 서론 복원
+      // 서론 복원 — sessionStorage(미액션 keystroke)가 있으면 우선, 없으면 DB
       const introDrafts = drafts.filter((d) => d.phase === 'intro');
-      setIntroText(introDrafts[introDrafts.length - 1]?.content ?? '');
+      const introDb = introDrafts[introDrafts.length - 1]?.content ?? '';
+      setIntroText(readLocalDraft(sessionId, 'intro', 0) ?? introDb);
 
       // 결론 복원
       const conclDrafts = drafts.filter((d) => d.phase === 'conclusion');
-      setConclusionText(conclDrafts[conclDrafts.length - 1]?.content ?? '');
+      const conclDb = conclDrafts[conclDrafts.length - 1]?.content ?? '';
+      setConclusionText(readLocalDraft(sessionId, 'conclusion', 0) ?? conclDb);
 
       // 제목 복원
       const titleDrafts = drafts.filter((d) => d.phase === 'title');
-      setTitleText(titleDrafts[titleDrafts.length - 1]?.content ?? '');
+      const titleDb = titleDrafts[titleDrafts.length - 1]?.content ?? '';
+      setTitleText(readLocalDraft(sessionId, 'title', 0) ?? titleDb);
 
       // 본론 복원 — paragraph_idx별 최신 draft + commit 여부
       const bodyDraftsByIdx: Record<number, DraftRow[]> = {};
@@ -185,9 +221,10 @@ export default function WritePage({
       for (let i = 0; i < paragraphCount; i++) {
         const list = bodyDraftsByIdx[i] ?? [];
         const last = list[list.length - 1];
+        const localBody = readLocalDraft(sessionId, 'body', i);
         paras.push({
           idx: i,
-          content: last?.content ?? '',
+          content: localBody ?? last?.content ?? '',
           committed: bodyCommitIdx.has(i),
         });
       }
@@ -239,8 +276,11 @@ export default function WritePage({
     return bodyParagraphs[currentBodyIdx]?.content ?? '';
   }
 
-  // ─── 자동 저장 ───
-  // 인자로 (phase, paragraphIdx, content)를 명시 받아 클로저 캡처 X — race condition 방지.
+  // ─── 자동 저장 (로컬 임시본만) ───
+  // 학생 keystroke는 1.1s debounce 후 sessionStorage에만 기록. DB POST는 안 한다.
+  // 액션 버튼('같이 고민' / '친구 설득' / '친구한테 보여주기' / '다음으로')이 눌렸을 때만
+  // flushAutosave()가 1회 DB에 반영 — 그 외 keystroke는 DB에 절대 들어가지 않는다.
+  // sessionStorage는 탭 종료 시 브라우저가 자동 정리한다.
   function scheduleAutosave(
     text: string,
     targetPhase?: Exclude<Phase, 'done'>,
@@ -252,36 +292,14 @@ export default function WritePage({
 
     pendingSaveRef.current = { phase: tphase, paragraphIdx: tidx, content: text, source };
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(async () => {
-      // pendingSaveRef는 가장 최신 입력을 가리키지만, 우리는 timer 시점의 (phase, idx, content)
-      // 페어를 사용한다 (= setTimeout 클로저로 캡처된 tphase/tidx/text — React state 아님).
-      const last = lastSavedRef.current;
-      if (
-        last &&
-        last.phase === tphase &&
-        last.paragraphIdx === tidx &&
-        last.content === text
-      ) {
-        return;
-      }
+    saveTimerRef.current = setTimeout(() => {
       try {
-        const res = await fetch(`/api/sessions/${sessionId}/draft`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            phase: tphase,
-            paragraphIdx: tidx,
-            content: text,
-            source,
-          }),
-        });
-        const data = await res.json();
-        if (res.ok && !data.deduped) {
-          showToast('저장됐어!', { emoji: '💾' });
-        }
-        lastSavedRef.current = { phase: tphase, paragraphIdx: tidx, content: text };
+        sessionStorage.setItem(
+          draftStorageKey(sessionId, tphase, tidx),
+          JSON.stringify({ content: text, source, savedAt: Date.now() })
+        );
       } catch (err) {
-        console.warn('autosave failed', err);
+        console.warn('local autosave failed', err);
       }
     }, 1100);
   }
@@ -338,6 +356,12 @@ export default function WritePage({
     });
     lastSavedRef.current = { phase: tphase, paragraphIdx: tidx, content: text };
     pendingSaveRef.current = null;
+    // DB 반영됐으므로 동일 (phase, idx)의 sessionStorage 임시본은 제거 — 메모리 누적 방지
+    try {
+      sessionStorage.removeItem(draftStorageKey(sessionId, tphase, tidx));
+    } catch {
+      // ignore
+    }
   }
 
   // ─── 텍스트 변경 핸들러 ───
@@ -512,6 +536,8 @@ export default function WritePage({
 
       if (data.nextPhase === 'done') {
         showToast('다 썼다! 친구가 마지막 평가 하는 중...', { emoji: '🎉' });
+        // 세션 종료 — 이 세션의 모든 임시본 즉시 삭제
+        clearAllLocalDrafts(sessionId);
         const closureRes = await fetch(`/api/sessions/${sessionId}/closure`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

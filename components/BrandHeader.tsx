@@ -1,4 +1,5 @@
 import Image from 'next/image';
+import Link from 'next/link';
 
 /**
  * The Annoying Classmates 브랜드 헤더 — viewport 최상단 고정 (우측 정렬).
@@ -10,7 +11,7 @@ import Image from 'next/image';
 export default function BrandHeader() {
   return (
     <header className="fixed top-0 left-0 right-0 z-[60] h-16 bg-amber-50/95 backdrop-blur-sm border-b border-amber-100 flex items-center justify-center px-4 sm:px-6">
-      <a
+      <Link
         href="/"
         className="inline-flex items-center gap-3 px-2 py-1 rounded-full hover:bg-white/70 transition"
         aria-label="The Annoying Friend 홈"
@@ -28,7 +29,7 @@ export default function BrandHeader() {
         <span className="font-display text-2xl sm:text-3xl text-amber-700 tracking-tight whitespace-nowrap">
           The Annoying Friend
         </span>
-      </a>
+      </Link>
     </header>
   );
 }

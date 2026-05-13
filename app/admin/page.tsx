@@ -177,6 +177,7 @@ export default function AdminDashboard() {
                     <th className="px-3 py-2 text-left font-semibold">closure</th>
                     <th className="px-3 py-2 text-right font-semibold">설득%</th>
                     <th className="px-3 py-2 text-left font-semibold">최종갱신</th>
+                    <th className="px-3 py-2 text-center font-semibold">결과 화면</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -221,6 +222,25 @@ export default function AdminDashboard() {
                       </td>
                       <td className="px-3 py-2 text-xs text-slate-500">
                         {formatDate(s.last_updated)}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <a
+                          href={`/result/${s.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={
+                            s.closure_type
+                              ? '학생이 본 최종 결과 화면 (closure 완료)'
+                              : '학생 결과 화면 — closure 미생성 (부분 표시)'
+                          }
+                          className={`text-xs px-2 py-1 rounded border ${
+                            s.closure_type
+                              ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100'
+                              : 'bg-slate-50 border-slate-300 text-slate-500 hover:bg-slate-100'
+                          }`}
+                        >
+                          🎉 보기
+                        </a>
                       </td>
                     </tr>
                   ))}

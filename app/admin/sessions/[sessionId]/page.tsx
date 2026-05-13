@@ -87,13 +87,32 @@ export default function AdminSessionDetail({
               {session.id}
             </div>
           </div>
-          <a
-            href={`/api/sessions/${session.id}/export`}
-            download
-            className="text-xs px-3 py-2 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700"
-          >
-            📥 JSON 내보내기
-          </a>
+          <div className="flex gap-2 flex-wrap">
+            <a
+              href={`/result/${session.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={
+                closure
+                  ? '학생이 본 최종 결과 화면 (closure 완료)'
+                  : '학생 결과 화면 — closure 미생성 시 부분 표시'
+              }
+              className={`text-xs px-3 py-2 rounded border ${
+                closure
+                  ? 'border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
+                  : 'border-slate-300 bg-white hover:bg-slate-50 text-slate-700'
+              }`}
+            >
+              🎉 학생 결과 화면
+            </a>
+            <a
+              href={`/api/sessions/${session.id}/export`}
+              download
+              className="text-xs px-3 py-2 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700"
+            >
+              📥 JSON 내보내기
+            </a>
+          </div>
         </header>
 
         {/* 메타 */}

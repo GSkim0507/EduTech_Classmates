@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# session journals (per-session JSON event logs, mirrored from DB)
+/data/sessions/

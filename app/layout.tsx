@@ -22,6 +22,8 @@ export default function RootLayout({
           href="https://fonts.gstatic.com"
           crossOrigin="anonymous"
         />
+        {/* next/font/google의 subsets에 'korean'이 없어 한글 글리프가 빠지므로 직접 로드 유지 */}
+        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
         <link
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap"

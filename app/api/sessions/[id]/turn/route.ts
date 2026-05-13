@@ -12,6 +12,7 @@ import {
   getLatestCalibration,
   touchSession,
 } from '@/lib/queries';
+import { appendJournalEvent } from '@/lib/sessionJournal';
 import { buildSystemPrompt } from '@/lib/persona';
 import {
   calibrate,
@@ -141,6 +142,8 @@ export async function POST(
   }
 
   const studentIdx = await getNextTurnIdx(id);
+  const studentTs = now();
+  const studentParagraphIdxForRow = phase === 'body' && !isBodyAllMode ? paragraphIdx : null;
   const studentTurnResult = await db.execute({
     sql: `INSERT INTO turns
             (session_id, idx, phase, paragraph_idx, role, content,
@@ -151,15 +154,29 @@ export async function POST(
       studentIdx,
       phase,
       // body 전체 모드면 paragraph_idx=null, 단일 모드면 idx
-      phase === 'body' && !isBodyAllMode ? paragraphIdx : null,
+      studentParagraphIdxForRow,
       studentContent,
       trigger,
       trigger === 'help' ? (helpDomain ?? null) : null,
       latestDraft?.id ?? null,
-      now(),
+      studentTs,
     ],
   });
   const studentTurnId = Number(studentTurnResult.lastInsertRowid);
+
+  // JSON 저널 — 학생 turn (액션 버튼 트리거)
+  await appendJournalEvent(id, {
+    type: 'turn_student',
+    timestamp: studentTs,
+    turnId: studentTurnId,
+    idx: studentIdx,
+    phase,
+    paragraphIdx: studentParagraphIdxForRow,
+    trigger,
+    helpDomain: trigger === 'help' ? (helpDomain ?? null) : null,
+    relatedDraftId: latestDraft?.id ?? null,
+    content: studentContent,
+  });
 
   // ─── preceding 컨텍스트 수집 ───
   const preceding: PrecedingContent = {};
@@ -249,6 +266,8 @@ export async function POST(
     readyForNext = calib.readyForNext;
 
     // calibration 저장
+    const calibTs = now();
+    const calibParagraphIdxForRow = phase === 'body' && !isBodyAllMode ? paragraphIdx : null;
     const calibRow = await db.execute({
       sql: `INSERT INTO calibrations
               (session_id, phase, paragraph_idx, trigger, draft_id,
@@ -258,17 +277,32 @@ export async function POST(
       args: [
         id,
         phase,
-        phase === 'body' && !isBodyAllMode ? paragraphIdx : null,
+        calibParagraphIdxForRow,
         latestDraft?.id ?? 0,
         JSON.stringify(signals),
         curriculumSignals ? JSON.stringify(curriculumSignals) : null,
         nextTone,
         nextDomain,
         weakestViolationLabel,
-        now(),
+        calibTs,
       ],
     });
     calibrationId = Number(calibRow.lastInsertRowid);
+    await appendJournalEvent(id, {
+      type: 'calibration',
+      timestamp: calibTs,
+      calibrationId,
+      phase,
+      paragraphIdx: calibParagraphIdxForRow,
+      trigger: 'submit',
+      draftId: latestDraft?.id ?? null,
+      signals,
+      curriculumSignals,
+      nextTone,
+      nextDomain,
+      weakestViolationLabel,
+      readyForNext,
+    });
   } else if (trigger === 'help') {
     // help는 calibrator 안 부름. 직전 calibration의 tone 유지 + helpDomain → domain.
     const lastCalib = await getLatestCalibration(id);
@@ -359,6 +393,8 @@ export async function POST(
 
   // ─── assistant turn 저장 ───
   const assistantIdx = studentIdx + 1;
+  const assistantTs = now();
+  const assistantParagraphIdxForRow = phase === 'body' && !isBodyAllMode ? paragraphIdx : null;
   const assistantResult = await db.execute({
     sql: `INSERT INTO turns
             (session_id, idx, phase, paragraph_idx, role, content,
@@ -369,7 +405,7 @@ export async function POST(
       id,
       assistantIdx,
       phase,
-      phase === 'body' && !isBodyAllMode ? paragraphIdx : null,
+      assistantParagraphIdxForRow,
       assistantMessage,
       trigger,
       trigger === 'help' ? (helpDomain ?? null) : null,
@@ -377,15 +413,32 @@ export async function POST(
       calibrationId,
       nextTone,
       nextDomain,
-      now(),
+      assistantTs,
     ],
+  });
+
+  const assistantTurnId = Number(assistantResult.lastInsertRowid);
+  await appendJournalEvent(id, {
+    type: 'turn_assistant',
+    timestamp: assistantTs,
+    turnId: assistantTurnId,
+    idx: assistantIdx,
+    phase,
+    paragraphIdx: assistantParagraphIdxForRow,
+    trigger,
+    helpDomain: trigger === 'help' ? (helpDomain ?? null) : null,
+    relatedDraftId: latestDraft?.id ?? null,
+    calibrationId,
+    tone: nextTone,
+    domain: nextDomain,
+    content: assistantMessage,
   });
 
   await touchSession(id);
 
   return NextResponse.json({
     studentTurnId,
-    assistantTurnId: Number(assistantResult.lastInsertRowid),
+    assistantTurnId,
     assistantMessage,
     tone: nextTone,
     domain: nextDomain,

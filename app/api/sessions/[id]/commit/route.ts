@@ -6,6 +6,7 @@ import {
   getLatestDraftParagraph,
   touchSession,
 } from '@/lib/queries';
+import { appendJournalEvent } from '@/lib/sessionJournal';
 import type { CommitRequestInput, Phase } from '@/lib/types';
 
 const PHASE_ORDER: Exclude<Phase, 'done'>[] = ['intro', 'body', 'conclusion', 'title'];
@@ -54,18 +55,28 @@ export async function POST(
     for (let i = 0; i < totalBody; i++) {
       const latest = await getLatestDraftParagraph(id, phase as Exclude<Phase, 'done'>, i);
       if (!latest?.content?.trim()) continue; // 빈 문단 skip
+      const ts = now();
       const committedResult = await db.execute({
         sql: `INSERT INTO draft_revisions
                 (session_id, phase, paragraph_idx, content, content_hash, source, preceding_turn_id, timestamp)
               VALUES (?, ?, ?, ?, ?, 'committed', NULL, ?)`,
-        args: [id, phase, i, latest.content, hashContent(latest.content), now()],
+        args: [id, phase, i, latest.content, hashContent(latest.content), ts],
       });
       const cid = Number(committedResult.lastInsertRowid);
       await db.execute({
         sql: `INSERT OR REPLACE INTO phase_paragraph_commits
                 (session_id, phase, paragraph_idx, committed_draft_id, committed_at)
               VALUES (?, ?, ?, ?, ?)`,
-        args: [id, phase, i, cid, now()],
+        args: [id, phase, i, cid, ts],
+      });
+      await appendJournalEvent(id, {
+        type: 'commit',
+        timestamp: ts,
+        committedDraftId: cid,
+        phase,
+        paragraphIdx: i,
+        content: latest.content,
+        mode: 'body_all',
       });
       lastCommittedDraftId = cid;
       paragraphIdx = i;
@@ -94,6 +105,7 @@ export async function POST(
       );
     }
 
+    const ts = now();
     const committedResult = await db.execute({
       sql: `INSERT INTO draft_revisions
               (session_id, phase, paragraph_idx, content, content_hash, source, preceding_turn_id, timestamp)
@@ -104,7 +116,7 @@ export async function POST(
         paragraphIdx,
         latest.content,
         hashContent(latest.content),
-        now(),
+        ts,
       ],
     });
     lastCommittedDraftId = Number(committedResult.lastInsertRowid);
@@ -113,7 +125,16 @@ export async function POST(
       sql: `INSERT OR REPLACE INTO phase_paragraph_commits
               (session_id, phase, paragraph_idx, committed_draft_id, committed_at)
             VALUES (?, ?, ?, ?, ?)`,
-      args: [id, phase, paragraphIdx, lastCommittedDraftId, now()],
+      args: [id, phase, paragraphIdx, lastCommittedDraftId, ts],
+    });
+    await appendJournalEvent(id, {
+      type: 'commit',
+      timestamp: ts,
+      committedDraftId: lastCommittedDraftId,
+      phase,
+      paragraphIdx,
+      content: latest.content,
+      mode: 'single',
     });
   }
 

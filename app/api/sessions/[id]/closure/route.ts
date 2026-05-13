@@ -10,6 +10,7 @@ import {
 import { buildClosurePrompt } from '@/lib/persona';
 import { callClaude } from '@/lib/claude';
 import { parseClosureResponse } from '@/lib/closure';
+import { appendJournalEvent } from '@/lib/sessionJournal';
 
 interface ClosureBody {
   apiKey: string;
@@ -133,6 +134,7 @@ export async function POST(
     };
   }
 
+  const closureTs = now();
   await db.execute({
     sql: `INSERT INTO closures
             (session_id, closure_type, persuasion_pct, agent_message, rationale_json, created_at)
@@ -143,14 +145,24 @@ export async function POST(
       parsed.persuasionPct,
       parsed.agentMessage,
       JSON.stringify(parsed.rationale),
-      now(),
+      closureTs,
     ],
   });
 
   await db.execute({
     sql: `UPDATE sessions SET status = 'completed', current_phase = 'done', last_updated = ?
           WHERE id = ?`,
-    args: [now(), id],
+    args: [closureTs, id],
+  });
+
+  // JSON 저널 미러 — result 페이지가 보여주는 모든 데이터가 DB + 저널 양쪽에 남도록
+  await appendJournalEvent(id, {
+    type: 'closure',
+    timestamp: closureTs,
+    closureType: parsed.closureType,
+    persuasionPct: parsed.persuasionPct,
+    agentMessage: parsed.agentMessage,
+    rationale: parsed.rationale,
   });
 
   await touchSession(id);
